@@ -25,8 +25,7 @@ byte logLevel[11] = {
 // the setup function runs once when you press reset or power the board
 void setup()
 {
-  Serial.begin(19200);
-  // initialize digital pin 13 as an output.
+  initDebug();
   initAD();
   initTimers();
   initState();
@@ -39,12 +38,10 @@ void setup()
 #ifdef HAS_LOCKING
   initLocking();
 #endif
-  Serial.println("We are running!");
+  // Serial.println("We are running!");
 }
 
 // the loop function runs over and over again forever
-
-char str[128];
 
 byte portCount = ACTUAL_PORTS;
 
@@ -69,10 +66,10 @@ void loop()
 #endif
   if (lastS != sCount) {
      lastS = sCount;
-     Serial.print("Tick ");
-     Serial.println(lastS);
-     sprintf(str, "Level L %d, H %d", adResult[0][0], adResult[0][1]);
-     Serial.println(str);
+     // Serial.print("Tick ");
+     // Serial.println(lastS);
+     //sprintf(str, "Level L %d, H %d", adResult[0][0], adResult[0][1]);
+     //Serial.println(str);
 
 //     sprintf(str, "PORTL %x, PINL %x, DDRL %x", PORTL, PINL, DDRL);
 //     Serial.println(str);

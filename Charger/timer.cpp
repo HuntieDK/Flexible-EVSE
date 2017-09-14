@@ -2,18 +2,18 @@
 
 #define UNWRAP(X) X
 
-#define INITTIMER_8_WRAP(N) \
+#define INITTIMER_8_WRAP(N,I) \
   TCCR##N##A = orBits(WGM##N##0, -1); \
   TCCR##N##B = orBits(WGM##N##2, CS##N##2, -1); \
-  TIMSK##N = orBits(TOIE##N, -1); \
+  TIMSK##N = I; \
   TIFR##N = orBits(-1); \
   OCR##N##A = TIMER_TOP_8;
 
-#define INITTIMER_16_WRAP(N) \
+#define INITTIMER_16_WRAP(N, I) \
   TCCR##N##A = orBits(WGM##N##1, -1); \
   TCCR##N##B = orBits(WGM##N##3, CS##N##1, /*CS##N##0,*/ -1); \
   TCCR##N##C = orBits(-1); \
-  TIMSK##N = orBits(TOIE##N, -1); \
+  TIMSK##N = I; \
   TIFR##N = orBits(-1); \
   ICR##N = TIMER_TOP;
 
@@ -27,17 +27,20 @@
 #define TIMER_BITS_WRAP(timer) TIMER_BITS_##timer
 #define TIMER_BITS(timer) TIMER_BITS_WRAP(timer)
 
-#define INITTIMER_WRAP3(X,B) INITTIMER_##B##_WRAP(X)
-#define INITTIMER_WRAP2(X,B) INITTIMER_WRAP3(X,B)
-#define INITTIMER_WRAP(X) INITTIMER_WRAP2(X, TIMER_BITS_##X)
-#define INITTIMER(X) INITTIMER_WRAP(X)
+#define TIMER_REG_WRAP(reg,timer) reg##timer
+#define TIMER_REG(reg,timer) TIMER_REG_WRAP(reg,timer)
+
+#define INITTIMER_WRAP3(X,B,I) INITTIMER_##B##_WRAP(X,I)
+#define INITTIMER_WRAP2(X,B,I) INITTIMER_WRAP3(X,B,I)
+#define INITTIMER_WRAP(X, I) INITTIMER_WRAP2(X, TIMER_BITS_##X, I)
+#define INITTIMER(X, I) INITTIMER_WRAP(X, I)
 
 static int lastOutput[N_PORTS];
 
 #ifdef SINGLE_CHARGER
 
 #define TIMER_A  1
-#define TIMER_B  2
+
 static int timerMap[N_PORTS] = { TIMER_A };
 static int masks[N_PORTS] = { // Map port to timer ports as port connections are twisted
   (1<<COM1B1)|(1<<COM1B0)
@@ -54,6 +57,7 @@ static int dataBits[N_PORTS] = { // Map port to pin output mask
 
 #define TIMER_A  3
 #define TIMER_B  4
+
 static const int timerMap[N_PORTS] /*PROGMEM*/ = { TIMER_A, TIMER_A, TIMER_A, TIMER_B, TIMER_B, TIMER_B };
 static const int masks[N_PORTS] /*PROGMEM*/ = { // Map port to timer ports as port connections are twisted
   (1<<COM3B1)|(1<<COM3B0),
@@ -117,14 +121,20 @@ void initTimers()
 
   cli();  // Stop interrupts
 
+#ifdef PSRSYNC
   GTCCR = orBits(TSM, PSRSYNC, -1); // Stop timers for sync 
+#else
+  GTCCR = orBits(TSM, -1); // Stop timers for sync 
+#endif
 
   // Set up timers to use phase-correct PWM, top register
-  INITTIMER(TIMER_A);
-  INITTIMER(TIMER_B);  // Timer 2/4 used for car 4, 5, 6
-  
-  REG2(TCNT,TIMER_A) = 0;  // Init timer 3 value to 0
-  REG2(TCNT,TIMER_B) = (TIMER_BITS(TIMER_B)==16) ? TIMER_TOP_16 : TIMER_TOP_8;  // Init timer 4 value to TOP value to allow for alternate top/bottom interrupts
+  INITTIMER(TIMER_A, orBits(TIMER_REG(TOIE, TIMER_A), TIMER_REG(ICIE, TIMER_A), -1));
+  REG2(TCNT,TIMER_A) = 0;  // Init timer A value to 0
+
+#ifdef TIMER_B
+  INITTIMER(TIMER_B, 0);  // Timer 2/4 used for car 4, 5, 6
+  REG2(TCNT,TIMER_B) = 0;  // Init timer B value to 0
+#endif
 
   GTCCR = 0;  // Release timers
 
@@ -210,17 +220,17 @@ void MsTimer()
   msCount++;
 }
 
-#define ISR_ROUTINE_WRAP(N,H,F) \
-ISR(TIMER##N##_OVF_vect) \
+#define ISR_ROUTINE_WRAP(N,H,I,F) \
+ISR(TIMER##N##_##I##_vect) \
 { \
   TIFR##N = 0; \
   startAD(H); \
   F \
 }
-#define ISR_ROUTINE(N,H,F) ISR_ROUTINE_WRAP(N,H,F)
+#define ISR_ROUTINE(N,H,I,F) ISR_ROUTINE_WRAP(N,H,I,F)
 
-ISR_ROUTINE(TIMER_A, 0, MsTimer(););
-ISR_ROUTINE(TIMER_B, 1, );
+ISR_ROUTINE(TIMER_A, 0, OVF, MsTimer(););
+ISR_ROUTINE(TIMER_A, 0, CAPT, );
 
 // General routines
 void setOutput(byte port, unsigned int dutyCycle)
@@ -230,11 +240,13 @@ void setOutput(byte port, unsigned int dutyCycle)
     return;
   }
 
+  /*
   Serial.print("setOutput(");
   Serial.print(port);
   Serial.print(", ");
   Serial.print(dutyCycle);
   Serial.println(")");
+  */
   
   switch (dutyCycle) {
   case 0:

@@ -22,7 +22,7 @@ uint16_t adResult[N_PORTS][2];
 uint16_t cableResults[N_PORTS];
 #endif
 
-static const byte levelMap[1023*3/100] /*PROGMEM*/ = {
+static const byte levelMap[1023*3/100] PROGMEM = {
   LEVEL_LOW12,  // -12 - -11
   LEVEL_UNDEF,  // -11 - -10
   LEVEL_UNDEF,  // -10 - -9
@@ -60,7 +60,7 @@ byte inputStates[N_PORTS];
 unsigned int inputStateAges[N_PORTS];
 static byte stateCount[N_PORTS][N_STATES];
 
-static const byte stateMap[N_LEVELS][N_LEVELS] /*PROGMEM*/ = {
+static const byte stateMap[N_LEVELS][N_LEVELS] PROGMEM = {
 //  LEVEL_UNDEF,  LEVEL_LOW12,  LEVEL_HIGH3,  LEVEL_HIGH6,  LEVEL_HIGH9,  LEVEL_HIGH12   <-- High half
   { STATE_UNDEF,  STATE_UNDEF,  STATE_UNDEF,  STATE_UNDEF,  STATE_UNDEF,  STATE_UNDEF   }, // Low half LEVEL_UNDEF
   { STATE_UNDEF,  STATE_UNDEF,  STATE_FAN,    STATE_CHARGE, STATE_WAIT,   STATE_DISCONN }, // Low half LEVEL_LOW12
@@ -121,11 +121,11 @@ ISR(ADC_vect)
   adResult[adPort][half] = level; // TODO: Remove...
   byte* portLevel = &portLevels[adPort][0];
   
-  portLevel[half] = levelMap[level * 3 / 100];
+  portLevel[half] = pgm_read_byte(&levelMap[level * 3 / 100]);
 
   if (adPart) {
     // Just got top/bottom measurement of adPort - calculate state.
-    byte state = stateMap[portLevel[0]][portLevel[1]];
+    byte state = pgm_read_byte(&stateMap[portLevel[0]][portLevel[1]]);
     byte& inputState = inputStates[adPort];
     byte oldState = inputState;
     for (int i=0; i<N_STATES; i++) {

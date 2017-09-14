@@ -52,7 +52,7 @@ void stateLocking()
       actuatorUnlock.write(!lockEngaging);
       setComplexTimer(timer, 60, false);
       timeOut = false;
-      Serial.print("Enable lock motor: "); Serial.println(locking);
+      // Serial.print("Enable lock motor: "); Serial.println(locking);
     } else {
       // Shouldn't get here: Fix bad state.
       actLocked = newLocked;
@@ -61,7 +61,7 @@ void stateLocking()
   if (timeOut) {
     if (locking != NO_LOCKING) {
       if (locking != AWAIT_IDLE) {
-        Serial.print("Diable lock motor: "); Serial.println(locking);
+        // Serial.print("Diable lock motor: "); Serial.println(locking);
         actuatorOn[locking].write(false);
         actuatorLock.write(false);
         actuatorUnlock.write(false);
@@ -82,7 +82,7 @@ void stateLocking()
   {
     static int lastS = -1;
     if (lastS != sCount) {
-      sprintf(str, "Lock status: %d/%d - %x/%x %d %d %d %d %d %d\n", 
+      /* sprintf(str, "Lock status: %d/%d - %x/%x %d %d %d %d %d %d\n", 
         timer, locking,
         newLocked, actLocked,
         lockReading[0].read(),
@@ -91,7 +91,7 @@ void stateLocking()
         lockReading[3].read(),
         lockReading[4].read(),
         lockReading[5].read());
-      Serial.println(str);
+      Serial.println(str); */
       lastS = sCount;
     }
   }
@@ -118,7 +118,7 @@ static void lockTransition(byte port, byte newState, byte oldState)
   case STATE_IDLE:
   case STATE_DISCONN:
     // Need to unlock
-    Serial.print("Unlock port "); Serial.println(port);
+    // Serial.print("Unlock port "); Serial.println(port);
     newLocked &= ~(1<<port);
     break;
 
@@ -128,7 +128,7 @@ static void lockTransition(byte port, byte newState, byte oldState)
   case STATE_FAN:
   case STATE_PAUSED:
     // Need to lock
-    Serial.print("Lock port "); Serial.println(port);
+    // Serial.print("Lock port "); Serial.println(port);
     newLocked |= (1<<port);
     break;
   }

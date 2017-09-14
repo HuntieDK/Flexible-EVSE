@@ -13,16 +13,30 @@
 #define CURRENT_10A       2
 #define CURRENT_13A       3
 #define CURRENT_16A       4
+#if MAX_CURRENT == 32
 #define CURRENT_20A       5
 #define CURRENT_24A       6
 #define CURRENT_32A       7
 #define CURRENT_SETTINGS  8
+#else
+#define CURRENT_SETTINGS  5
+#endif
 
 static byte current = CURRENT_6A;   // If not stored; init at lowest current
 static byte chargeCurrent = CURRENT_6A;
 
-static const byte currents[CURRENT_SETTINGS] /*PROGMEM*/ = { 6, 8, 10, 13, 16, 20, 24, 32 };
-static const byte intensity[CURRENT_SETTINGS] /*PROGMEM*/ = { 4, 10, 20, 44, 80, 116, 160, 255 };
+static const byte currents[CURRENT_SETTINGS] PROGMEM = { 6, 8, 10, 13, 16
+#if MAX_CURRENT == 32
+  , 20, 24, 32
+#endif
+};
+static const byte intensity[CURRENT_SETTINGS] PROGMEM = {
+#if MAX_CURRENT == 32
+4, 10, 20, 44, 80, 116, 160, 255
+#else
+16, 32, 64, 128, 255
+#endif
+};
 
 #define UI_STATE_ACTIVE   0
 #define UI_STATE_PAUSED   1
@@ -186,18 +200,22 @@ static void colorOut(int intensity, int color)
     TCCR0A |= orBits(COM0A1, COM0B1, COM0B0, -1);
     OCR0A = color - intensity * color / 255;
     OCR0B = color + intensity * (255 - color) / 255;
-    PORTD &= ~orBits(PORTD5, PORTD6, -1); 
-    DDRD |= orBits(PORTD5, PORTD6, -1);
+    PORTA &= ~orBits(PORTA7, -1); 
+    PORTB &= ~orBits(PORTB2, -1); 
+    DDRA |= orBits(PORTA7, -1);
+    DDRB |= orBits(PORTB2, -1);
   } else {
     TCCR0A &= ~orBits(COM0A1, COM0B1, COM0B0, -1);
-    DDRD &= ~orBits(PORTD5, PORTD6, -1);
-    PORTD &= ~orBits(PORTD5, PORTD6, -1); 
+    DDRA &= ~orBits(PORTA7, -1);
+    DDRB &= ~orBits(PORTB2, -1);
+    PORTA &= ~orBits(PORTA7, -1); 
+    PORTB &= ~orBits(PORTB2, -1); 
   }
 }
 
 void showCurrent(bool clearQueue)
 {
-  byte amps = currents[current];
+  byte amps = pgm_read_byte(&currents[current]);
   if (clearQueue) enQueue({0, 0, 2, 2}, true);
   while (amps>0) {
     if (amps >= 10) {
@@ -245,15 +263,15 @@ void buttonChange(bool pressed, int duration)
       enQueue({255, 255, PRESS_SHORT, 0}, true);    // Green light indicate short press
       enQueue({255, 0, PRESS_LONG-PRESS_SHORT, 0}); // Blue light indicates charge setup menu. After that, go back to normal indication
     } else {
-      Serial.print("Duration: ");
-      Serial.print(duration, DEC);
-      Serial.println(".");
+      // Serial.print("Duration: ");
+      // Serial.print(duration, DEC);
+      // Serial.println(".");
 
       if (duration <= PRESS_SHORT) {
-        Serial.println("Active -> short...");
+        // Serial.println("Active -> short...");
         shortPressed++;
         if (shortPressed == 2) {
-          Serial.println("Active -> PAUSED...");
+          // Serial.println("Active -> PAUSED...");
           changeState(UI_STATE_PAUSED);
           shortPressed = 0;
         } else {
@@ -262,9 +280,9 @@ void buttonChange(bool pressed, int duration)
       } else {
         shortPressed = 0;
         if (duration <= PRESS_LONG) {
-          Serial.println("Active -> long...");
+          // Serial.println("Active -> long...");
           // Long press.
-          Serial.println("Active -> CURRENT...");
+          // Serial.println("Active -> CURRENT...");
           changeState(UI_STATE_CURRENT);
         } // Else nothing...
       }
@@ -286,17 +304,17 @@ void buttonChange(bool pressed, int duration)
   case UI_STATE_CURRENT:
     if (pressed) {
       // Set up LED to reflect button press length
-      enQueue({intensity[(current + 1) % CURRENT_SETTINGS], 255, PRESS_SHORT, 0}, true); // Within short press: Next current level
+      enQueue({pgm_read_byte(&intensity[(current + 1) % CURRENT_SETTINGS]), 255, PRESS_SHORT, 0}, true); // Within short press: Next current level
       enQueue({255, 0, PRESS_LONG-PRESS_SHORT, 0}); // Exit using new current: Blue light
       enQueue({255, 220, PRESS_EXTRA_LONG-PRESS_LONG, 0}); // Exit and save new current: 
       enQueue({0, 0, PRESS_ULTRA_LONG-PRESS_EXTRA_LONG, 0}); // Exit and save new current: 
-      enQueue({intensity[current], 255, 255, 0}); // Back to selection
+      enQueue({pgm_read_byte(&intensity[current]), 255, 255, 0}); // Back to selection
     } else {
       if (duration <= PRESS_SHORT) {
         current = (current + 1) % CURRENT_SETTINGS;
-        enQueue({intensity[current], 255, 5, 0}, true);
+        enQueue({pgm_read_byte(&intensity[current]), 255, 5, 0}, true);
         showCurrent(false);
-        enQueue({intensity[current], 255, 255, 0});
+        enQueue({pgm_read_byte(&intensity[current]), 255, 255, 0});
       } else
       if (duration < PRESS_LONG) {
         setCurrent();
@@ -327,7 +345,7 @@ static void changeState(byte newState)
   case UI_STATE_CURRENT:
     current = chargeCurrent;
     showCurrent(true);
-    enQueue({intensity[current], 255, 255, 0});
+    enQueue({pgm_read_byte(&intensity[current]), 255, 255, 0});
     break;
   case UI_STATE_PAUSED:
     chargerPaused[0] = true;  // Will be picked up by state logic
@@ -340,7 +358,7 @@ static void changeState(byte newState)
 
 byte getCurrent(byte port)
 {
-  return currents[chargeCurrent];
+  return pgm_read_byte(&currents[chargeCurrent]);
 }
 
 void setCurrent()

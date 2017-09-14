@@ -1,11 +1,15 @@
 #include <stdarg.h>
 #include <Arduino.h>
 
-#ifdef ARDUINO_AVR_MINI
+#ifdef ATTINYX4
 #define SINGLE_CHARGER
 #else
 #define MULTI_CHARGER
 #include <Controllino.h>
+#endif
+
+#if !defined(SINGLE_CHARGER) && !defined(MULTI_CHARGER)
+#error "Unknown hardware"
 #endif
 
 #ifdef SINGLE_CHARGER
@@ -13,12 +17,10 @@
 #define N_PORTS 1
 #define ACTUAL_PORTS  1
 
-#define LATCHING_RELAY      // Define this if a latching relay is used.
-#define N_PORT_RELAYS   2   // 2 relays per port in this config (must be drawn individually)
-#define N_LATCH_STATES  2   // 2 for latching relays (0=off, 1=on), 1 for non-latching relay
-
 #define HAS_UI              // We got button and led UI (manages current setting)
 #undef  HAS_CURRENT_MGMT    // No active current management
+
+#define MAX_CURRENT 16
 
 #define PWM_SLOPE_CORRECTION  5   // Slope takes about 6ms in single charger opamp output - correct by that much
 
@@ -32,9 +34,6 @@
 #define N_PORTS 6
 #define ACTUAL_PORTS  2
 
-#undef LATCHING_RELAY       // Define this if a latching relay is used.
-#define N_PORT_RELAYS   1   // 1 contactor per port in this config
-#define N_LATCH_STATES  1   // 2 for latching relays (0=off, 1=on), 1 for non-latching relay
 #undef  HAS_UI              // No button and led UI
 #define HAS_CURRENT_MGMT    // Active current management enabled (controls current setting)
 
@@ -114,7 +113,6 @@ extern volatile unsigned int msCount;
 extern volatile unsigned int csCount;
 extern volatile unsigned int dsCount;
 extern volatile unsigned int sCount;
-extern char str[];
 #ifdef MONITOR_RELAYS
 extern bool relayMonitor[N_PORTS];
 #endif
@@ -169,4 +167,7 @@ void stateMetering();
 void initLocking();
 void stateLocking();
 #endif
+
+// debug.cpp
+void initDebug();
 

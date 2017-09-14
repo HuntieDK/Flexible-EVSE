@@ -7,11 +7,11 @@ bool chargerPaused[N_PORTS];
 
 #ifdef SINGLE_CHARGER
 
-static const byte relayPorts[N_PORTS][N_LATCH_STATES][N_PORT_RELAYS] /*PROGMEM*/ = { 9, 8, 12, 13 };
+static const byte relayPorts[N_PORTS] /*PROGMEM*/ = { 2 };
 
 #else
 
-static const byte relayPorts[N_PORTS][N_PORT_RELAYS][N_LATCH_STATES] /*PROGMEM*/ = { 4, 9, 10, 11, 12, 13 };    // Controllino D2,7,8,9,10,11 (order due to timer connections)
+static const byte relayPorts[N_PORTS] /*PROGMEM*/ = { 4, 9, 10, 11, 12, 13 };    // Controllino D2,7,8,9,10,11 (order due to timer connections)
 
 #ifdef MONITOR_RELAYS
 static const AtmelPort relayMonitorPins[N_PORTS] /*PROGMEM*/ = { APORT(L,1), APORT(L,0), APORT(D,4), APORT(D,5), APORT(D,6), APORT(J,4) };   // D18-23 port blocks on Controllino Mega (PL1, PL0, PD4, PD5, PD6, PJ4)
@@ -20,7 +20,7 @@ bool relayMonitor[N_PORTS] = { false, false, false, false, false, false };
 
 #endif
 
-#define N_HOOKS 5
+#define N_HOOKS 3
 
 static PortCondition conditions[N_STATES+1][N_HOOKS];
 static byte conditionCount[N_STATES+1];
@@ -35,7 +35,7 @@ struct stateDef {
   // TODO: Add function pointer to state change verification machine
 };
 
-static const stateDef nextStates[N_STATES][N_STATES] /*PROGMEM*/ = {
+static const stateDef nextStates[N_STATES][N_STATES] PROGMEM = {
   // CURRENTvv MEASURED>> STATE_UNDEF          STATE_IDLE           STATE_CONNECT           STATE_WAIT          STATE_CHARGE          STATE_FAN           STATE_DISCONN      STATE_PAUSED
   /* STATE_UNDEF   */ { { STATE_UNDEF,  0 }, { STATE_IDLE, 100 }, { STATE_UNDEF,     0 }, { STATE_UNDEF, 0 }, { STATE_UNDEF,    0 }, { STATE_UNDEF, 0 }, { STATE_IDLE, 10 }, { STATE_UNDEF,   0 } },
   /* STATE_IDLE    */ { { STATE_IDLE,   0 }, { STATE_IDLE,   0 }, { STATE_CONNECT, 100 }, { STATE_UNDEF, 0 }, { STATE_UNDEF,    0 }, { STATE_UNDEF, 0 }, { STATE_IDLE,  0 }, { STATE_IDLE,    0 } },
@@ -48,7 +48,7 @@ static const stateDef nextStates[N_STATES][N_STATES] /*PROGMEM*/ = {
 };
 
 
-static const bool indicatePower[N_STATES] /*PROGMEM*/ = {
+static const byte indicatePower[N_STATES] PROGMEM= {
   /* STATE_UNDEF   */ false,
   /* STATE_IDLE    */ false,
   /* STATE_CONNECT */ false,
@@ -59,7 +59,7 @@ static const bool indicatePower[N_STATES] /*PROGMEM*/ = {
   /* STATE_PAUSED  */ false,
 };
 
-static const bool relayOn[N_STATES] /*PROGMEM*/ = {
+static const byte relayOn[N_STATES] PROGMEM = {
   /* STATE_UNDEF   */ false,
   /* STATE_IDLE    */ false,
   /* STATE_CONNECT */ false,
@@ -86,21 +86,14 @@ void initState()
 
   for (port = 0; port < N_PORTS; port++) {
     setOutput(port, TIMER_TOP);
-    for (byte latch = 0; latch < N_LATCH_STATES; latch++) {
-      for (byte relay = 0; relay < N_PORT_RELAYS; relay++) {
-        digitalWrite(relayPorts[port][latch][relay], LOW);
-        pinMode(relayPorts[port][latch][relay], OUTPUT);
-      }
-    }
+    digitalWrite(relayPorts[port], LOW);
+    pinMode(relayPorts[port], OUTPUT);
     relayState(port, false);
     // Set up ports to input, pull up.
 #ifdef MONITOR_RELAYS
     relayMonitorPins[port].input(true);
 #endif
   }
-#if N_LATCH_STATES > 1
-  addSimpleTimer(TIMER_DS, &relayTimer);  // For latching relays, we need timer callbacks every 0.1s to turn coils on/off
-#endif
 }
 
 static bool switchActive = false;
@@ -109,47 +102,11 @@ static byte switchPort = 0;
 static byte switchRelay = 0;
 static int switchStart = 0;
 
-static void relayTimer()
-{
-  // Handle latching relays - called every 0.1 s
-  if (!switchActive) return;
-  if (dsCount-switchStart >= RELAY_TIME + (switchRelay==0 ? 1 : 0)) {
-    // Turn off this output; maybe turn on next.
-    digitalWrite(relayPorts[switchPort][switchOn][switchRelay], LOW);
-    if (++switchRelay == N_PORT_RELAYS) {
-      switchActive = false; // All done
-    } else {
-      digitalWrite(relayPorts[switchPort][switchOn][switchRelay], HIGH);  // Start flipping next relay
-      switchStart = dsCount;  // Keep timing from here
-    }
-  }
-}
-
 static void relayState(byte port, bool on)
 {
-  Serial.println(on?"ON...":"OFF...");
-#if N_LATCH_STATES == 1
+  // Serial.println(on?"ON...":"OFF...");
   // Monostable relay
-  for (byte relay = 0; relay < N_PORT_RELAYS; relay++) {
-    digitalWrite(relayPorts[port][0][relay], on ? HIGH : LOW);
-  }
-#else
-  // Bistable relay: Turn off all coils but relevant on/off coil on first relay:
-  for (byte latch = 0; latch < N_LATCH_STATES; latch++) {
-    digitalWrite(relayPorts[port][latch][0], (latch==(on?1:0))?HIGH:LOW);  // Set first relevant relay active, rest inactive
-    for (byte relay = 1; relay < N_PORT_RELAYS; relay++) {
-      digitalWrite(relayPorts[port][latch][relay], LOW);
-    }
-  }
-  cli();
-  // Set up info for timer function:
-  switchPort = port;
-  switchRelay = 0;
-  switchStart = dsCount;
-  switchOn = on;
-  switchActive = true;
-  sei();
-#endif
+  digitalWrite(relayPorts[port], on ? HIGH : LOW);
 }
 
 extern uint16_t adResult[N_PORTS][2];
@@ -177,30 +134,31 @@ static unsigned int calcPWM(unsigned int current)
   } else {
     result = PWM_RESULT(PWMHIGH);
   }
-  sprintf(str, "Current: %u PWM: %u\n", current, result);
-  Serial.println(str);
+  // sprintf(str, "Current: %u PWM: %u\n", current, result);
+  // Serial.println(str);
   return result;
 }
 
 void chargerState()
 {
   byte port;
+  stateDef nextState;
   for (port = 0; port < N_PORTS; port++) {
     byte& portState = portStates[port];
-    const stateDef& nextState = nextStates[portState][chargerPaused[port]?STATE_PAUSED:inputStates[port]];
+    memcpy_P(&nextState, &nextStates[portState][chargerPaused[port]?STATE_PAUSED:inputStates[port]], sizeof(stateDef));
     if (inputStateAges[port] >= nextState.minAge) {
       if (portState != nextState.nextState && checkConditions(port, nextState.nextState, portState)) {
         runTransitions(port, nextState.nextState, portState);
         portState = nextState.nextState;
-        setOutput(port, indicatePower[portState]?calcPWM(getCurrent(port)):TIMER_TOP);
-        if (relayOn[portState] != relayStates[port]) {
-          relayState(port, relayStates[port] = relayOn[portState]);
+        setOutput(port, pgm_read_byte(&indicatePower[portState])?calcPWM(getCurrent(port)):TIMER_TOP);
+        if (pgm_read_byte(&relayOn[portState]) != relayStates[port]) {
+          relayState(port, relayStates[port] = pgm_read_byte(&relayOn[portState]));
         }
 #ifdef HAS_UI
         updateChargerState();
 #endif
-        sprintf(str, "Port %d: New state %d, relay: %s (level L %d, H %d)", port, portState, relayOn[portState] ? "ON" : "OFF", adResult[0][0], adResult[0][1]);
-        Serial.println(str);
+        // sprintf(str, "Port %d: New state %d, relay: %s (level L %d, H %d)", port, portState, relayOn[portState] ? "ON" : "OFF", adResult[0][0], adResult[0][1]);
+        // Serial.println(str);
       }
     }
 #ifdef MONITOR_RELAYS
@@ -213,7 +171,7 @@ void updateCurrent()
 {
   byte port;
   for (port = 0; port < N_PORTS; port++) {
-    if (indicatePower[portStates[port]]) {
+    if (pgm_read_byte(&indicatePower[portStates[port]])) {
       setOutput(port, calcPWM(getCurrent(port)));
     }
   }
