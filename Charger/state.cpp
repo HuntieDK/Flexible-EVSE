@@ -7,11 +7,11 @@ bool chargerPaused[N_PORTS];
 
 #ifdef SINGLE_CHARGER
 
-static const byte relayPorts[N_PORTS] /*PROGMEM*/ = { 2 };
+static const byte relayPorts[N_PORTS] = { 2 };
 
 #else
 
-static const byte relayPorts[N_PORTS] /*PROGMEM*/ = { 4, 9, 10, 11, 12, 13 };    // Controllino D2,7,8,9,10,11 (order due to timer connections)
+static const byte relayPorts[N_PORTS] = { 4, 9, 10, 11, 12, 13 };    // Controllino D2,7,8,9,10,11 (order due to timer connections)
 
 #ifdef MONITOR_RELAYS
 static const AtmelPort relayMonitorPins[N_PORTS] /*PROGMEM*/ = { APORT(L,1), APORT(L,0), APORT(D,4), APORT(D,5), APORT(D,6), APORT(J,4) };   // D18-23 port blocks on Controllino Mega (PL1, PL0, PD4, PD5, PD6, PJ4)
@@ -48,7 +48,7 @@ static const stateDef nextStates[N_STATES][N_STATES] PROGMEM = {
 };
 
 
-static const byte indicatePower[N_STATES] PROGMEM= {
+static const byte indicatePower[N_STATES] PROGMEM = {
   /* STATE_UNDEF   */ false,
   /* STATE_IDLE    */ false,
   /* STATE_CONNECT */ false,

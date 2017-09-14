@@ -8,20 +8,6 @@ static int i = 0;
 
 extern uint16_t adResult[][2];
 
-byte logLevel[11] = {
-  0,
-  1,
-  2,
-  3,
-  5,
-  8,
-  13,
-  22,
-  36,
-  60,
-  100
-};
-
 // the setup function runs once when you press reset or power the board
 void setup()
 {

@@ -93,7 +93,7 @@ struct AtmelPort {
 #define TIMER_CNT   4
 
 // Max number of timer calls for each
-#define MAX_TIMERS  10
+#define MAX_TIMERS  3
 
 #define RELAY_TIME  3   // 3/10 sec for flipping bistable relay
 
