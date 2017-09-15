@@ -2,10 +2,19 @@
 #include <Arduino.h>
 
 #ifdef ATTINYX4
+
 #define SINGLE_CHARGER
+
+#ifdef F_CPU
+#undef F_CPU
+#endif
+#define F_CPU 15360000  // In our design cpu runs at 15.36 MHz
+
 #else
+
 #define MULTI_CHARGER
 #include <Controllino.h>
+
 #endif
 
 #if !defined(SINGLE_CHARGER) && !defined(MULTI_CHARGER)
@@ -170,4 +179,9 @@ void stateLocking();
 
 // debug.cpp
 void initDebug();
+void debug_ch(char c);
+void debug_str(const char* s);
+void debug_str_p(const char* s);
+void debugf_p(const char* progmem_fmt, ...);
+void debugf(const char* fmt, ...);
 
