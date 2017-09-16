@@ -7,18 +7,18 @@ void initDebug()
 #ifdef MULTI_CHARGERR
     Serial.begin(19200);
 #endif
-#ifdef SINGLE_CHARGER
+#if defined(SINGLE_CHARGER) && defined(SERIAL_DEBUG)
 	serialSetup();	
 #endif
 }
 
-void debug_ch(char c)
+inline void debug_ch(char c)
 {
 #ifdef MULTI_CHARGERR
 	Serial.print(c);
 #endif
-#ifdef SINGLE_CHARGER
-	serialWriteChar(c);	
+#if defined(SINGLE_CHARGER) && defined(SERIAL_DEBUG)
+	serialWrite(c);	
 #endif
 }
 
@@ -41,8 +41,17 @@ static va_list ap;
 
 static void debugf_ch(char ch)
 {
-	if (in_pct) {
-		if (ch < '0' && ch >= '9') {
+	if (!in_pct) {
+    if (ch == '%') {
+      in_pct = true;
+    } else {
+      if (ch == '\n') {
+        debug_ch('\r');
+      }
+      debug_ch(ch);
+    }
+  } else {
+		if (ch < '0' || ch > '9') {
 			switch (ch) {
 			case '.':
 			case 'z':
@@ -73,7 +82,23 @@ static void debugf_ch(char ch)
 					if (!*p) *--p = '0';
 					debug_str(p);
 				}
+        in_pct = false;
 				break;
+      case 'u':
+        {
+          char buf[10];
+          char* p = buf+sizeof(buf);
+          *--p = '\0';
+          unsigned int value = va_arg(ap, unsigned int);
+          while (value) {
+            *--p = (value%10)+'0';
+            value /= 10;
+          }
+          if (!*p) *--p = '0';
+          debug_str(p);
+        }
+        in_pct = false;
+        break;
 			case 'x':
 				{
 					char buf[10];
@@ -88,27 +113,26 @@ static void debugf_ch(char ch)
 					if (!*p) *--p = '0';
 					debug_str(p);
 				}
+        in_pct = false;
 				break;
 			case 'c':
 				debug_ch(va_arg(ap, char));
+        in_pct = false;
 				break;
 			case 's':
 				debug_str(va_arg(ap, const char*));
+        in_pct = false;
 				break;
 			case 'S':
 				debug_str_p(va_arg(ap, const char*));
+        in_pct = false;
 				break;
 			default:
 				debug_ch('%');
-				debug_ch(ch)
+				debug_ch(ch);
+        in_pct = false;
+        break;
 			}
-			
-		}
-	} else {
-		if (ch == '%') {
-			in_pct = true;
-		} else {
-			debug_ch(ch);
 		}
 	}
 }

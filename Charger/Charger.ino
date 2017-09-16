@@ -8,14 +8,27 @@ static int i = 0;
 
 extern uint16_t adResult[][2];
 
+#include "usi-serial.h"
+
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+  
   initDebug();
+
+  DEBUG_CSTR_P("           \nInitializing...\n");
+
+  DEBUG_CSTR_P("Init AD...\n");
   initAD();
+
+  DEBUG_CSTR_P("Init Timers...\n");
   initTimers();
+
+  DEBUG_CSTR_P("Init State...\n");
   initState();
+
 #ifdef HAS_UI
+  DEBUG_CSTR_P("Init UI...\n");
   initUI();
 #endif
 #ifdef HAS_METERING
@@ -24,7 +37,8 @@ void setup()
 #ifdef HAS_LOCKING
   initLocking();
 #endif
-  // Serial.println("We are running!");
+
+  DEBUG_CSTR_P("Mini EVSE is running.\n");
 }
 
 // the loop function runs over and over again forever
@@ -52,8 +66,7 @@ void loop()
 #endif
   if (lastS != sCount) {
      lastS = sCount;
-     // Serial.print("Tick ");
-     // Serial.println(lastS);
+     DEBUGF_CSTR_P("Tick %d\n", lastS);
      //sprintf(str, "Level L %d, H %d", adResult[0][0], adResult[0][1]);
      //Serial.println(str);
 

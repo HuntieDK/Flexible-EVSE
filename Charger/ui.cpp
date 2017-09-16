@@ -5,7 +5,24 @@
 
 #ifdef HAS_UI
 
-#define BUTTON_PIN      7
+#define BUTTON_PIN          4
+
+#define LED_COMMON_ANODE      // Define if LED has common anode (i.e. active low)
+
+#define LED_PIN_R           3
+#define LED_PIN_G           7
+#define LED_PIN_B           8
+
+#undef  PWM_LED_PIN_R
+
+#ifdef SERIAL_DEBUG
+#undef  PWM_LED_PIN_G   // Cannot PWM while attiny serial runs
+#undef  PWM_LED_PIN_B
+#else
+#define PWM_LED_PIN_G       LED_PIN_G
+#define PWM_LED_PIN_B       LED_PIN_B
+#endif
+
 #define DEBOUNCE_COUNT  3
 
 #define CURRENT_6A        0
@@ -20,6 +37,16 @@
 #define CURRENT_SETTINGS  8
 #else
 #define CURRENT_SETTINGS  5
+#endif
+
+#ifdef  LED_COMMON_ANODE
+#define LED_ON  LOW
+#define LED_OFF HIGH
+#define LED_INT(x) (255-(x))
+#else
+#define LED_ON  HIGH
+#define LED_OFF LOW
+#define LED_INT(x) (x)
 #endif
 
 static byte current = CURRENT_6A;   // If not stored; init at lowest current
@@ -47,7 +74,7 @@ static byte   curState = UI_STATE_ACTIVE;    // What are we doing currently
 /* Initialization */
 static void debounceTimer();
 static void symbolTimer();
-static void colorOut(int intensity, int color);
+static void colorOut(byte r, byte g, byte b);
 static void showCurrent(bool clearQueue);
 static void bufferEmpty();
 static void uiActiveState();
@@ -73,14 +100,13 @@ void initUI()
 
   // We use timer 0 (OC0A, OC0B = pin 5 and 6) for PWM control of UI led. However we need to invert one output to allow all colors.
   // However we need the output of one pin to be inverted, so we manipulate the registers.
-  digitalWrite(5, LOW);
-  digitalWrite(6, LOW);
-  pinMode(5, OUTPUT);
-  pinMode(6, OUTPUT);
-  // Set up timer flags. It should already be running fast PWM mode... Just invert output.
-  TCCR0A = orBits(COM0A1, COM0B1, COM0B0, WGM01, WGM00, -1);
-  TCCR0B = orBits(CS01, CS00, -1);
-  colorOut(0, 0);
+  digitalWrite(LED_PIN_R, LED_OFF);
+  digitalWrite(LED_PIN_G, LED_OFF);
+  digitalWrite(LED_PIN_B, LED_OFF);
+  pinMode(LED_PIN_R, OUTPUT);
+  pinMode(LED_PIN_G, OUTPUT);
+  pinMode(LED_PIN_B, OUTPUT);
+  colorOut(0, 0, 0);
   showCurrent(true);
 }
 
@@ -117,8 +143,10 @@ static void debounceTimer()
 #define BUFFER_MASK 0x0f
 
 static struct Symbol {
-  byte intensity; // LED intensity
-  byte color;     // LED color
+  // Intensities:
+  byte r;
+  byte g;
+  byte b;
   byte duration;  // Duration in ds - 255 means forever
   byte pause;     // Pause until next symbol
 } outputBuffer[BUFFER_LENGTH];
@@ -132,7 +160,7 @@ static void nextSymbol() // Must be called with interrupts disabled...
 {
   if (outputBufferOut != outputBufferIn) {
     currentSymbol = outputBuffer + outputBufferOut;
-    colorOut(currentSymbol->intensity, currentSymbol->color);
+    colorOut(currentSymbol->r, currentSymbol->g, currentSymbol->b);
     if (currentSymbol->duration < 255) {
       // Get everything ready for our decisecond interrupt routine
       outputBufferOut = (outputBufferOut + 1)&BUFFER_MASK; // Point out next symbol
@@ -144,7 +172,7 @@ static void nextSymbol() // Must be called with interrupts disabled...
     }
   } else {
     currentSymbol = nullptr;
-    colorOut(0, 0);
+    colorOut(0, 0, 0);
     bufferEmpty();
   }
 }
@@ -157,7 +185,7 @@ static void symbolTimer()
     if (timePassed >= currentSymbol->duration) {
       // We're done displaying initial color. Maybe we need to pause:
       if (currentSymbol->pause > 0) {
-        colorOut(0, currentSymbol->color);
+        colorOut(0, 0, 0);
         currentSymbol->duration = 0;  // Indicate we're timing pause now...
         symbolStamp = dsCount;
       } else {
@@ -190,40 +218,37 @@ static bool enQueue(const Symbol& symbol, bool clear = false)
   sei();
 }
 
-static void colorOut(int intensity, int color)
+static void colorOut(byte r, byte g, byte b)
 {
-  // Color = 0: Blue - Color = 255: Green;
-  // Intensity = 0: Off, Intensity = 255: Full
-  intensity = 255 - intensity;
-
-  if (intensity != 255) {
-    TCCR0A |= orBits(COM0A1, COM0B1, COM0B0, -1);
-    OCR0A = color - intensity * color / 255;
-    OCR0B = color + intensity * (255 - color) / 255;
-    PORTA &= ~orBits(PORTA7, -1); 
-    PORTB &= ~orBits(PORTB2, -1); 
-    DDRA |= orBits(PORTA7, -1);
-    DDRB |= orBits(PORTB2, -1);
-  } else {
-    TCCR0A &= ~orBits(COM0A1, COM0B1, COM0B0, -1);
-    DDRA &= ~orBits(PORTA7, -1);
-    DDRB &= ~orBits(PORTB2, -1);
-    PORTA &= ~orBits(PORTA7, -1); 
-    PORTB &= ~orBits(PORTB2, -1); 
-  }
+  #ifdef PWM_LED_PIN_R
+  analogWrite(PWM_LED_PIN_R, LED_INT(r));
+  #else
+  digitalWrite(LED_PIN_R, r ? LED_ON : LED_OFF);
+  #endif
+  #ifdef PWM_LED_PIN_G
+  analogWrite(PWM_LED_PIN_G, LED_INT(g));
+  #else
+  digitalWrite(LED_PIN_G, g ? LED_ON : LED_OFF);
+  #endif
+  #ifdef PWM_LED_PIN_B
+  analogWrite(PWM_LED_PIN_B, LED_INT(b));
+  #else
+  digitalWrite(LED_PIN_B, b ? LED_ON : LED_OFF);
+  #endif
 }
 
 void showCurrent(bool clearQueue)
 {
   byte amps = pgm_read_byte(&currents[current]);
+  DEBUGF_CSTR_P("Current: %d\n\r", amps);
   if (clearQueue) enQueue({0, 0, 2, 2}, true);
   while (amps>0) {
     if (amps >= 10) {
       amps -= 10;
-      enQueue({255, 0, 6, 3});
+      enQueue({0, 0, 255, 6, 3});
     } else {
       amps--;
-      enQueue({255, 192, 2, amps ? 2 : 3});
+      enQueue({0, 255, 255, 2, amps ? 2 : 3});
     }
   }
 }
@@ -232,8 +257,12 @@ void showCurrent(bool clearQueue)
 static bool bttn = false;
 static unsigned int tm = 0;
 
+static bool sb = false;
+
+
 void uiState()
 {
+  DEBUGF_CSTR_P("Button state: %d\n", digitalRead(BUTTON_PIN));
   if (bttn != buttonState) {
     bttn = buttonState;
     cli();
@@ -260,8 +289,8 @@ void buttonChange(bool pressed, int duration)
       if (duration >= PRESS_LONG) {
         shortPressed=0; // Ignore short presses after 2s
       }
-      enQueue({255, 255, PRESS_SHORT, 0}, true);    // Green light indicate short press
-      enQueue({255, 0, PRESS_LONG-PRESS_SHORT, 0}); // Blue light indicates charge setup menu. After that, go back to normal indication
+      enQueue({0, 255, 0, PRESS_SHORT, 0}, true);    // Green light indicate short press
+      enQueue({0, 0, 255, PRESS_LONG-PRESS_SHORT, 0}); // Blue light indicates charge setup menu. After that, go back to normal indication
     } else {
       // Serial.print("Duration: ");
       // Serial.print(duration, DEC);
@@ -290,8 +319,8 @@ void buttonChange(bool pressed, int duration)
     break;
   case UI_STATE_PAUSED:
     if (pressed) {
-      enQueue({255, 255, PRESS_SHORT, 0}, true);    // Green light indicate restart charging
-      enQueue({255, 0, PRESS_LONG-PRESS_SHORT, 0}); // Blue light indicates charge setup menu. After that, go back to normal indication
+      enQueue({0, 255, 0, PRESS_SHORT, 0}, true);    // Green light indicate restart charging
+      enQueue({0, 0, 255, PRESS_LONG-PRESS_SHORT, 0}); // Blue light indicates charge setup menu. After that, go back to normal indication
     } else {
       if (duration < PRESS_SHORT) {
         changeState(UI_STATE_ACTIVE);  // Short press: Resume charging
@@ -304,17 +333,17 @@ void buttonChange(bool pressed, int duration)
   case UI_STATE_CURRENT:
     if (pressed) {
       // Set up LED to reflect button press length
-      enQueue({pgm_read_byte(&intensity[(current + 1) % CURRENT_SETTINGS]), 255, PRESS_SHORT, 0}, true); // Within short press: Next current level
-      enQueue({255, 0, PRESS_LONG-PRESS_SHORT, 0}); // Exit using new current: Blue light
-      enQueue({255, 220, PRESS_EXTRA_LONG-PRESS_LONG, 0}); // Exit and save new current: 
-      enQueue({0, 0, PRESS_ULTRA_LONG-PRESS_EXTRA_LONG, 0}); // Exit and save new current: 
-      enQueue({pgm_read_byte(&intensity[current]), 255, 255, 0}); // Back to selection
+      enQueue({0, pgm_read_byte(&intensity[(current + 1) % CURRENT_SETTINGS]), 0, PRESS_SHORT, 0}, true); // Within short press: Next current level
+      enQueue({0, 0, 255, PRESS_LONG-PRESS_SHORT, 0}); // Exit using new current: Blue light
+      enQueue({0, 255, 255, PRESS_EXTRA_LONG-PRESS_LONG, 0}); // Exit and save new current: 
+      enQueue({0, 0, 0, PRESS_ULTRA_LONG-PRESS_EXTRA_LONG, 0}); // Exit and save new current: 
+      enQueue({0, pgm_read_byte(&intensity[current]), 0, 255, 0}); // Back to selection
     } else {
       if (duration <= PRESS_SHORT) {
         current = (current + 1) % CURRENT_SETTINGS;
-        enQueue({pgm_read_byte(&intensity[current]), 255, 5, 0}, true);
+        enQueue({0, pgm_read_byte(&intensity[current]), 0, 5, 0}, true);
         showCurrent(false);
-        enQueue({pgm_read_byte(&intensity[current]), 255, 255, 0});
+        enQueue({0, pgm_read_byte(&intensity[current]), 0, 255, 0});
       } else
       if (duration < PRESS_LONG) {
         setCurrent();
@@ -345,13 +374,13 @@ static void changeState(byte newState)
   case UI_STATE_CURRENT:
     current = chargeCurrent;
     showCurrent(true);
-    enQueue({pgm_read_byte(&intensity[current]), 255, 255, 0});
+    enQueue({0, pgm_read_byte(&intensity[current]), 0, 255, 0});
     break;
   case UI_STATE_PAUSED:
     chargerPaused[0] = true;  // Will be picked up by state logic
-    enQueue({255, 240, 4, 4}, true); // Do five slow cyan 1Hz blinks while state changes
-    enQueue({255, 240, 4, 4});
-    enQueue({255, 240, 4, 5});
+    enQueue({0, 255, 255, 4, 4}, true); // Do five slow cyan 1Hz blinks while state changes
+    enQueue({0, 255, 255, 4, 4});
+    enQueue({0, 255, 255, 4, 5});
     break;
   }
 }
@@ -376,19 +405,19 @@ static void indicateChargerState()
 {
   switch (portStates[0]) {
   case STATE_UNDEF:
-    enQueue({255, 192, 1, 1}, true); // Cyan fast blink for undefined state
+    enQueue({255, 0, 0, 1, 1}, true); // Red fast blink for undefined state
     break;
   case STATE_IDLE:
   case STATE_DISCONN:
-    enQueue({255, 255, 1, 14}, true); // Green slow blink for idle state
+    enQueue({0, 255, 0, 1, 14}, true); // Green slow blink for idle state
     break;
   case STATE_CONNECT:
   case STATE_WAIT:
-    enQueue({255, 0, 1, 14}, true); // Blue slow blink for waiting state
+    enQueue({0, 0, 255, 1, 14}, true); // Blue slow blink for waiting state
     break;
   case STATE_CHARGE:
   case STATE_FAN:
-    enQueue({255, 0, 255, 0}, true); // Blue constant light for charging state
+    enQueue({0, 0, 255, 255, 0}, true); // Blue constant light for charging state
     break;
   }
 }
@@ -409,7 +438,7 @@ static void bufferEmpty()
     indicateChargerState();
     break;
   case UI_STATE_PAUSED:
-    enQueue({255, 255, 1, 9}, true); // Green short slow blink for paused state
+    enQueue({255, 255, 0, 1, 9}, true); // Yellow short slow blink for paused state
     break;
   case UI_STATE_CURRENT:
     break;

@@ -7,7 +7,7 @@ bool chargerPaused[N_PORTS];
 
 #ifdef SINGLE_CHARGER
 
-static const byte relayPorts[N_PORTS] = { 2 };
+static const byte relayPorts[N_PORTS] = { 2 };  // Attiny84 port PA2
 
 #else
 

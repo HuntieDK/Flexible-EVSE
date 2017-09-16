@@ -26,6 +26,8 @@
 #define N_PORTS 1
 #define ACTUAL_PORTS  1
 
+#define SERIAL_DEBUG        // Enable ATTINY84 debug output
+
 #define HAS_UI              // We got button and led UI (manages current setting)
 #undef  HAS_CURRENT_MGMT    // No active current management
 
@@ -56,6 +58,7 @@
 #endif
 
 // Some Atmel port Id's used throughout the code
+#define PORT_A_ID  'a'
 #define PORT_B_ID  'b'
 #define PORT_D_ID  'd'
 #define PORT_E_ID  'e'
@@ -77,10 +80,9 @@ struct AtmelPort {
 #define APORT_WRAP(ID,PNO) { &PORT##ID, &DDR##ID, &PIN##ID, PNO }
 #define APORT(ID, PNO) APORT_WRAP(ID,PNO)
 
-#define TIMER_TOP_16 1000   // Top value for 16-bit timers for 1kHz with factor 8 prescaling
-#define TIMER_TOP_8   125   // Top value for 8-bit timers for 1kHz with factor 64 prescaling (not used for PWM output, only sampling interrupt due to resolution)
-
-#define TIMER_TOP TIMER_TOP_16   // Value used for PWM calculation always relates to 16-bit timer to get good correct resolution
+#define TIMER_TOP_16  (F_CPU/8/1000/2)  // Top value for 16-bit timers for 1kHz with factor 8 prescaling
+#define TIMER_TOP_8   (F_CPU/64/1000/2) // Top value for 8-bit timers for 1kHz with factor 64 prescaling
+#define TIMER_TOP TIMER_TOP_16          // Value used for PWM calculation always relates to 16-bit timer to get good correct resolution
 
 // Charging states:
 #define STATE_UNDEF       0   // State is undefined / in error
@@ -184,4 +186,7 @@ void debug_str(const char* s);
 void debug_str_p(const char* s);
 void debugf_p(const char* progmem_fmt, ...);
 void debugf(const char* fmt, ...);
+
+#define DEBUGF_CSTR_P(str, ...) { static const char _loc_p_str[] PROGMEM = str; debugf_p(_loc_p_str, __VA_ARGS__); }
+#define DEBUG_CSTR_P(str) { static const char _loc_p_str[] PROGMEM = str; debug_str_p(_loc_p_str); }
 

@@ -43,14 +43,14 @@ static int lastOutput[N_PORTS];
 
 static int timerMap[N_PORTS] = { TIMER_A };
 static int masks[N_PORTS] = { // Map port to timer ports as port connections are twisted
-  (1<<COM1B1)|(1<<COM1B0)
+  (1<<COM1A1)|(1<<COM1A0)
 };
 
 // The following must indicate the same timer pin.
-static int pinMap[N_PORTS] = { 10 };
-static int portMap[N_PORTS] = { PORT_B_ID };
+static int pinMap[N_PORTS] = { 6 };
+static int portMap[N_PORTS] = { PORT_A_ID };
 static int dataBits[N_PORTS] = { // Map port to pin output mask
-  1<<PORTB2
+  1<<PORTA6
 };
 
 #else // MULTI_CHARGER
@@ -254,6 +254,15 @@ void setOutput(byte port, unsigned int dutyCycle)
     {
       // Set output register first...
       switch (portMap[port]) {
+#ifdef PORTA
+      case PORT_A_ID:
+        if (dutyCycle) {
+          PORTA = PORTA | dataBits[port];
+        } else {
+          PORTA = PORTA & ~dataBits[port];
+        }
+        break;
+#endif
 #ifdef PORTB
       case PORT_B_ID:
         if (dutyCycle) {
@@ -329,8 +338,11 @@ void setOutput(byte port, unsigned int dutyCycle)
       }
 #endif
       switch (port) {
-      case 0: REG3(OCR, TIMER_A, B) = value; break;
+#ifdef SINGLE_CHARGER
+      case 0: REG3(OCR, TIMER_A, A) = value; break;
+#endif
 #ifdef MULTI_CHARGER
+      case 0: REG3(OCR, TIMER_A, B) = value; break;
       case 1: REG3(OCR, TIMER_A, C) = value; break;
       case 2: REG3(OCR, TIMER_A, A) = value; break;
       case 3: REG3(OCR, TIMER_B, A) = value; break;

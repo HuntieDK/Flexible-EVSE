@@ -6,6 +6,25 @@
 
 #define SAMPLE_COUNT  3   // # of samples to be correct in a row to change state
 
+#ifdef SINGLE_CHARGER
+
+static const byte ADCPPorts[N_PORTS] = { 1 };
+#ifdef UNTETHERED
+static const byte ADPPPorts[N_PORTS] = { 0 };
+#endif
+
+#endif
+
+
+#ifdef MULTI_CHARGER
+
+static const byte ADCPPorts[N_PORTS] = { 0, 1, 2, 3, 4, 5 };
+#ifdef UNTETHERED
+static const byte ADPPPorts[N_PORTS] = { 6, 7, 8, 9, 10, 11 };
+#endif
+
+#endif
+
 // Legal state values:
 
 #define LEVEL_UNDEF     0
@@ -88,7 +107,7 @@ void initAD()
 #ifdef MINI
   ADCSRB &= ~_BV(MUX5);
 #endif
-  ADMUX = ADREF | adPort;
+  ADMUX = ADREF | ADCPPorts[adPort];
   DIDR0 |= orBits(ADC5D, ADC4D, ADC3D, ADC2D, ADC1D, ADC0D);
 }
 
@@ -111,7 +130,7 @@ ISR(ADC_vect)
     // Cable resistor measurement on proximity pin done
     cableResults[adPort] = level;
     adPort = (adPort + 1) % N_PORTS;
-    ADMUX = ADREF | adPort;
+    ADMUX = ADREF | ADCPPorts[adPort];
     return;
   }
 #endif
@@ -162,10 +181,10 @@ ISR(ADC_vect)
 #ifndef UNTETHERED
     // If cable is tethered, we're done.
     adPort = (adPort + 1) % N_PORTS;
-    ADMUX = ADREF | adPort;
+    ADMUX = ADREF | ADCPPorts[adPort];
 #else
     // Cable is untethered - do resistor measurement
-    ADMUX = ADREF | (adPort+N_PORTS); // MUX to proximity input
+    ADMUX = ADREF | ADPPPorts[adPort]; // MUX to proximity input
     ADCSRA |= _BV(ADSC); // Start conversion
     adPart = 2;   // Remember we're doing resistor measurement
 #endif

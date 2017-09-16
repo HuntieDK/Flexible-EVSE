@@ -1,10 +1,10 @@
 #include <Arduino.h>
 #include "usi-serial.h"
+#include "defs.h"
 /*  
  An example of USI Serial Send for ATtiny24/44/84.
  Sends a text message every second.
-   
-ATTiny84 PA5/MISO/DO = Serial UART Tx -> connect to Rx of serial output device
+ ATTiny84 PA5/MISO/DO = Serial UART Tx -> connect to Rx of serial output device
 */
 
 /* Supported combinations:
@@ -88,7 +88,7 @@ void usiserial_send_byte(uint8_t data)
     GTCCR |= _BV(PSR10);                    // Reset prescaler
     OCR0A = FULL_BIT_TICKS;                 // Trigger every full bit width
     TCNT0 = 0;                              // Count up from 0 
-    TIMSK0 |= 1<<OCIE0A;                    // Interrupt on match for our simple timer
+    // TIMSK0 |= 1<<OCIE0A;                  // Interrupt on match for our simple timer
 
     // Configure USI to send high start bit and 7 bits of data
     USIDR = 0x00 |                            // Start bit (low)
@@ -102,6 +102,11 @@ void usiserial_send_byte(uint8_t data)
 }
 
 // USI overflow interrupt indicates we have sent a buffer
+
+#ifndef USI_OVF_vect
+#error "Invalid vector USI_OVF_vect"
+#endif
+
 ISR (USI_OVF_vect)
 {
     if (usiserial_send_get_state() == FIRST)
@@ -124,7 +129,7 @@ ISR (USI_OVF_vect)
 }
 
 void serialSetup() {
-    pinMode(5,HIGH);                // Configure USI_DO as output.
+    pinMode(5,OUTPUT);                // Configure USI_DO as output.
     digitalWrite(5,HIGH);           // Ensure serial output is high when idle
 }
 
@@ -140,5 +145,20 @@ void serialWrite(const char ch)
 {
   while (!usiserial_send_available());
   usiserial_send_byte(ch);
+  while (!usiserial_send_available());
+}
+
+
+static volatile uint16_t timerCnt = 0;
+
+ISR(TIMER0_COMPA_vect)  // Every time we pass 
+{
+  timerCnt++;
+}
+
+void serialDelay(uint16_t cnt)
+{
+  uint16_t start = timerCnt;
+  while (timerCnt-start < cnt);
 }
 
