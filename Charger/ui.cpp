@@ -240,7 +240,7 @@ static void colorOut(byte r, byte g, byte b)
 void showCurrent(bool clearQueue)
 {
   byte amps = pgm_read_byte(&currents[current]);
-  DEBUGF_CSTR_P("Current: %d\n\r", amps);
+  // DEBUGF_CSTR_P("Current: %d\n\r", amps);
   if (clearQueue) enQueue({0, 0, 2, 2}, true);
   while (amps>0) {
     if (amps >= 10) {
@@ -262,7 +262,6 @@ static bool sb = false;
 
 void uiState()
 {
-  DEBUGF_CSTR_P("Button state: %d\n", digitalRead(BUTTON_PIN));
   if (bttn != buttonState) {
     bttn = buttonState;
     cli();

@@ -1,6 +1,6 @@
 #include "defs.h"
 #include "stdarg.h"
-#include "usi-serial.h"
+#include "tiny-serial.h"
 
 void initDebug()
 {

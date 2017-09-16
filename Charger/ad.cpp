@@ -104,11 +104,38 @@ void initAD()
   memset(stateCount, 0, sizeof(stateCount));
   
   ADCSRA = orBits(ADEN, ADIE, ADPS2, /*ADPS1, ADPS0,*/ -1);
-#ifdef MINI
-  ADCSRB &= ~_BV(MUX5);
-#endif
+// ?? #ifdef MINI
+//    ADCSRB &= ~_BV(MUX5);
+//    #endif
   ADMUX = ADREF | ADCPPorts[adPort];
-  DIDR0 |= orBits(ADC5D, ADC4D, ADC3D, ADC2D, ADC1D, ADC0D);
+
+  byte didr0 = DIDR0;
+#ifdef DIDR1
+  byte didr1 = DIDR1;
+#endif
+
+  for (byte port = 0; port < N_PORTS; port++) {
+    byte ad = ADCPPorts[ad];
+#ifdef DIDR1
+    if (ad > 7)
+      didr1 |= (1<<(ad-8));
+    else
+#endif
+      didr0 |= (1<<ad);
+#ifdef UNTETHERED
+    ad = ADPPPorts[ad];
+#ifdef DIDR1
+    if (ad > 7)
+      didr1 |= (1<<(ad-8));
+    else
+#endif
+      didr0 |= (1<<ad);
+#endif
+  }
+  DIDR0 = didr0;
+#ifdef DIDR1
+  DIDR1 = didr1;
+#endif  
 }
 
 void startAD(int half)
