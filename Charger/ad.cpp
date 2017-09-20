@@ -2,7 +2,12 @@
 
 #include <limits.h>
 
+
+#ifdef ATTINYX4
+#define ADREF 0 // We use AVCC as reference (5V) as this allows us to monitor full range -12 to 12.
+#else
 #define ADREF ( /*_BV(REFS1) |*/ _BV(REFS0))    // We use AVCC as reference (5V) as this allows us to monitor full range -12 to 12.
+#endif
 
 #define SAMPLE_COUNT  3   // # of samples to be correct in a row to change state
 
@@ -27,6 +32,7 @@ static const byte ADPPPorts[N_PORTS] = { 6, 7, 8, 9, 10, 11 };
 
 // Legal state values:
 
+// CP voltage levels:
 #define LEVEL_UNDEF     0
 #define LEVEL_LOW12     1
 #define LEVEL_HIGH3     2
@@ -35,10 +41,27 @@ static const byte ADPPPorts[N_PORTS] = { 6, 7, 8, 9, 10, 11 };
 #define LEVEL_HIGH12    5
 #define N_LEVELS        6
 
-uint16_t adResult[N_PORTS][2];
+// PP current levels:
+#define LEVEL_PP_OPEN   0
+#define LEVEL_PP_13A    1
+#define LEVEL_PP_20A    2
+#define LEVEL_PP_32A    3
+#define LEVEL_PP_63A    4
+#define LEVEL_PP_SHORT  5
+#define N_PP_LEVELS     6
+
+// Measurement levels (301 ohm + cable resistance voltage divider, 5V supply) - center values
+#define LEVEL_PP_OPEN_13A   938
+#define LEVEL_PP_13A_20A    781
+#define LEVEL_PP_20A_32A    571
+#define LEVEL_PP_32A_63A    344
+#define LEVEL_PP_63A_SHORT  128
+
+uint16_t adResult[N_PORTS][2] = { 0, 0 };
 
 #ifdef UNTETHERED
-uint16_t cableResults[N_PORTS];
+byte cableStates[N_PORTS];
+static byte cableStateCount[N_PORTS][N_PP_LEVELS];
 #endif
 
 static const byte levelMap[1023*3/100] PROGMEM = {
@@ -95,6 +118,10 @@ byte adPart = 0;
 int adStart = 0;
 int adDone = 0;
 
+#ifdef UNTETHERED
+static bool cableCondition(byte port, byte newState, byte oldState);
+#endif
+
 void initAD()
 {
   memset(adResult, 0, sizeof(adResult));
@@ -102,6 +129,11 @@ void initAD()
   memset(inputStates, STATE_UNDEF, sizeof(inputStates));
   memset(inputStateAges, 0, sizeof(inputStateAges));
   memset(stateCount, 0, sizeof(stateCount));
+  memset(cableStateCount, 0, sizeof(cableStateCount));
+
+#ifdef UNTETHERED
+  addCondition(STATE_ANY, cableCondition);
+#endif
   
   ADCSRA = orBits(ADEN, ADIE, ADPS2, /*ADPS1, ADPS0,*/ -1);
 // ?? #ifdef MINI
@@ -115,7 +147,7 @@ void initAD()
 #endif
 
   for (byte port = 0; port < N_PORTS; port++) {
-    byte ad = ADCPPorts[ad];
+    byte ad = ADCPPorts[port];
 #ifdef DIDR1
     if (ad > 7)
       didr1 |= (1<<(ad-8));
@@ -123,7 +155,7 @@ void initAD()
 #endif
       didr0 |= (1<<ad);
 #ifdef UNTETHERED
-    ad = ADPPPorts[ad];
+    ad = ADPPPorts[port];
 #ifdef DIDR1
     if (ad > 7)
       didr1 |= (1<<(ad-8));
@@ -155,7 +187,43 @@ ISR(ADC_vect)
 #ifdef UNTETHERED
   if (adPart == 2) {
     // Cable resistor measurement on proximity pin done
-    cableResults[adPort] = level;
+
+    // Determine PP state:
+
+    byte state;
+    if (level >= LEVEL_PP_OPEN_13A)
+      state = LEVEL_PP_OPEN;
+    else if (level >= LEVEL_PP_13A_20A)
+      state = LEVEL_PP_13A;
+    else if (level >= LEVEL_PP_20A_32A)
+      state = LEVEL_PP_20A;
+    else if (level >= LEVEL_PP_32A_63A)
+      state = LEVEL_PP_32A;
+    else if (level >= LEVEL_PP_63A_SHORT)
+      state = LEVEL_PP_63A;
+    else
+      state = LEVEL_PP_SHORT;
+
+    for (byte i=0; i<N_PP_LEVELS; i++) {
+      byte& count = cableStateCount[adPort][i];
+      byte& cableState = cableStates[adPort];
+      if (i == state) {
+        if (count < SAMPLE_COUNT) {
+          count++;
+          if (count == SAMPLE_COUNT) {
+            cableState = state;
+          }
+        }
+      } else {
+        if (count > 0) {
+          count--;
+          if (count == 0 && i == cableState) {
+            cableState = LEVEL_PP_OPEN;
+          }
+        }
+      }
+    }
+
     adPort = (adPort + 1) % N_PORTS;
     ADMUX = ADREF | ADCPPorts[adPort];
     return;
@@ -174,7 +242,7 @@ ISR(ADC_vect)
     byte state = pgm_read_byte(&stateMap[portLevel[0]][portLevel[1]]);
     byte& inputState = inputStates[adPort];
     byte oldState = inputState;
-    for (int i=0; i<N_STATES; i++) {
+    for (byte i=0; i<N_STATES; i++) {
       byte& count = stateCount[adPort][i];
       if (i == state) {
         if (count < SAMPLE_COUNT) {
@@ -219,4 +287,35 @@ ISR(ADC_vect)
   adDone++;
 }
 
+#ifdef UNTETHERED
 
+static bool cableCondition(byte port, byte newState, byte oldState)
+{
+  switch (newState) {
+  case STATE_CHARGE:
+  case STATE_FAN:
+  case STATE_WAIT:
+    // Can only go here with welldefined cable:
+    return cableStates[port] >= LEVEL_PP_13A && cableStates[port] <= LEVEL_PP_63A;
+  }
+  return true;
+}
+
+byte cableCurrentRestriction(byte port, byte current)
+{
+  switch (cableStates[port]) {
+  case LEVEL_PP_13A:
+    return current>13 ? 13 : current;
+  case LEVEL_PP_20A:
+    return current>20 ? 20 : current;
+  case LEVEL_PP_32A:
+    return current>32 ? 32 : current;
+  case LEVEL_PP_63A:
+    return current>63 ? 63 : current;
+  case LEVEL_PP_OPEN:
+  case LEVEL_PP_SHORT:
+    return 0;
+  }
+}
+
+#endif

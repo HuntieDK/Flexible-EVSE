@@ -99,11 +99,13 @@ struct Timer {
   bool      recurring;
 };
 
-static TimerFunc simpleTimerCalls[TIMER_CNT][MAX_TIMERS];
-static byte simpleTimerCount[TIMER_CNT] = { 0, 0, 0, 0 };
+static TimerFunc simpleTimerCalls[TIMER_CNT][MAX_SIMPLE_TIMERS];
+static byte simpleTimerCount[TIMER_CNT] = { 0, 0, 0 };
 
-static Timer complexTimers[TIMER_CNT][MAX_TIMERS];
-static byte complexTimerCount[TIMER_CNT] = { 0, 0, 0, 0 };
+#ifdef MAX_COMPLEX_TIMERS
+static Timer complexTimers[TIMER_CNT][MAX_COMPLEX_TIMERS];
+static byte complexTimerCount[TIMER_CNT] = { 0, 0, 0 };
+#endif
 
 #define REG2_WRAP(R, N) R##N
 #define REG2(R,N) REG2_WRAP(R,N)
@@ -144,15 +146,16 @@ void initTimers()
 void addSimpleTimer(byte timer, TimerFunc func)
 {
   byte& cnt = simpleTimerCount[timer];
-  if (cnt < MAX_TIMERS) {
+  if (cnt < MAX_SIMPLE_TIMERS) {
     simpleTimerCalls[timer][cnt++] = func;
   }
 }
 
+#ifdef MAX_COMPLEX_TIMERS
 Timer* addComplexTimer(byte unit, TimerFunc call)
 {
   byte& cnt = complexTimerCount[unit];
-  if (cnt < MAX_TIMERS) {
+  if (cnt < MAX_COMPLEX_TIMERS) {
     Timer* timer = &complexTimers[unit][cnt];
     memset(timer, 0, sizeof(Timer));
     timer->call = call;
@@ -171,6 +174,7 @@ void setComplexTimer(Timer* timer, uint16_t count, bool recurring)
     sei();
   }
 }
+#endif
 
 inline void runTimerCalls(byte timerUnit)
 {
@@ -178,6 +182,7 @@ inline void runTimerCalls(byte timerUnit)
   for (register byte cnt = simpleTimerCount[timerUnit]; cnt>0; cnt--) {
     (**(func++))();
   }
+#ifdef MAX_COMPLEX_TIMERS
   Timer* timer = complexTimers[timerUnit];
   for (register byte cnt = complexTimerCount[timerUnit]; cnt>0; cnt--) {
     if (timer->count != 0 && timer->rest != 0) {
@@ -191,6 +196,7 @@ inline void runTimerCalls(byte timerUnit)
     }
     timer++;
   }
+#endif
 }
 
 void MsTimer()
@@ -210,7 +216,7 @@ void MsTimer()
         ds10++;
       } else {
         ds10 = 0;
-        runTimerCalls(TIMER_S);
+        // runTimerCalls(TIMER_S);
         sCount++;
       }
       dsCount++;
@@ -230,7 +236,7 @@ ISR(TIMER##N##_##I##_vect) \
 #define ISR_ROUTINE(N,H,I,F) ISR_ROUTINE_WRAP(N,H,I,F)
 
 ISR_ROUTINE(TIMER_A, 0, OVF, MsTimer(););
-ISR_ROUTINE(TIMER_A, 0, CAPT, );
+ISR_ROUTINE(TIMER_A, 1, CAPT, );
 
 // General routines
 void setOutput(byte port, unsigned int dutyCycle)

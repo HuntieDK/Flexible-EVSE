@@ -16,14 +16,14 @@ void setup()
 
   DEBUG_CSTR_P("           \nInitializing...\n");
 
+  DEBUG_CSTR_P("Init State...\n");
+  initState();
+
   DEBUG_CSTR_P("Init AD...\n");
   initAD();
 
   DEBUG_CSTR_P("Init Timers...\n");
   initTimers();
-
-  DEBUG_CSTR_P("Init State...\n");
-  initState();
 
 #ifdef HAS_UI
   DEBUG_CSTR_P("Init UI...\n");
@@ -46,9 +46,12 @@ byte portCount = ACTUAL_PORTS;
 extern int adStart, adDone;
 extern byte portLevels[][2];
 extern byte portStates[];
+extern byte cableStates[];
 extern unsigned int portStateAges[];
 
 static unsigned int lastS = 0;
+
+extern uint16_t cableLevel;
 
 void loop()
 {
@@ -65,6 +68,8 @@ void loop()
   if (lastS != sCount) {
     lastS = sCount;
     DEBUGF_CSTR_P("Tick %d\n", lastS);
+    DEBUGF_CSTR_P("Measured state %d/%d\n", adResult[0][0], adResult[0][1])
+    DEBUGF_CSTR_P("Cable level %d\n", cableStates[0])
   }
 }
 

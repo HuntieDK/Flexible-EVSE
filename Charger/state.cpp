@@ -104,8 +104,7 @@ static int switchStart = 0;
 
 static void relayState(byte port, bool on)
 {
-  // Serial.println(on?"ON...":"OFF...");
-  // Monostable relay
+  DEBUGF_CSTR_P("Charging on port %d: %s\n", port, on?"ON...":"OFF...");
   digitalWrite(relayPorts[port], on ? HIGH : LOW);
 }
 
@@ -172,7 +171,11 @@ void updateCurrent()
   byte port;
   for (port = 0; port < N_PORTS; port++) {
     if (pgm_read_byte(&indicatePower[portStates[port]])) {
-      setOutput(port, calcPWM(getCurrent(port)));
+      byte current = getCurrent(port);
+#ifdef UNTETHERED
+      current = cableCurrentRestriction(port, current);
+#endif
+      setOutput(port, calcPWM(current));
     }
   }
 }

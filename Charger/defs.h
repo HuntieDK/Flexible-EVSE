@@ -36,7 +36,7 @@
 #define PWM_SLOPE_CORRECTION  5   // Slope takes about 6ms in single charger opamp output - correct by that much
 
 #undef  MONITOR_RELAYS
-#undef  UNTETHERED
+#define UNTETHERED
 #undef  HAS_METERING
 #undef  LOCKABLE
 
@@ -100,11 +100,16 @@ struct AtmelPort {
 #define TIMER_MS    0
 #define TIMER_CS    1
 #define TIMER_DS    2
-#define TIMER_S     3
-#define TIMER_CNT   4
+#define TIMER_CNT   3
 
 // Max number of timer calls for each
-#define MAX_TIMERS  3
+#ifdef SINGLE_CHARGER
+#undef MAX_COMPLEX_TIMERS
+#define MAX_SIMPLE_TIMERS  3
+#else
+#define MAX_COMPLEX_TIMERS  5
+#define MAX_COMPLEX_TIMERS  5
+#endif
 
 #define RELAY_TIME  3   // 3/10 sec for flipping bistable relay
 
@@ -143,6 +148,7 @@ void setComplexTimer(Timer* timer, uint16_t count, bool recurring);
 // ad.cpp
 void initAD();
 void startAD(int half);
+byte cableCurrentRestriction(byte port, byte current);
 
 // state.cpp
 void initState();
