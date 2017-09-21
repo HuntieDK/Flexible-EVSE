@@ -134,6 +134,12 @@ static unsigned int calcPWM(unsigned int current)
   return result;
 }
 
+#ifdef UNTETHERED
+#define RESTRICT_CURRENT(p, c) cableCurrentRestriction(p, c)
+#else
+#define RESTRICT_CURRENT(p, c) (c)
+#endif
+
 void chargerState()
 {
   byte port;
@@ -145,7 +151,7 @@ void chargerState()
       if (portState != nextState.nextState && checkConditions(port, nextState.nextState, portState)) {
         runTransitions(port, nextState.nextState, portState);
         portState = nextState.nextState;
-        setOutput(port, pgm_read_byte(&indicatePower[portState])?calcPWM(getCurrent(port)):TIMER_TOP);
+        setOutput(port, pgm_read_byte(&indicatePower[portState])?calcPWM(RESTRICT_CURRENT(port, getCurrent(port))):TIMER_TOP);
         if (pgm_read_byte(&relayOn[portState]) != relayStates[port]) {
           relayState(port, relayStates[port] = pgm_read_byte(&relayOn[portState]));
         }
@@ -167,11 +173,7 @@ void updateCurrent()
   byte port;
   for (port = 0; port < N_PORTS; port++) {
     if (pgm_read_byte(&indicatePower[portStates[port]])) {
-      byte current = getCurrent(port);
-#ifdef UNTETHERED
-      current = cableCurrentRestriction(port, current);
-#endif
-      setOutput(port, calcPWM(current));
+      setOutput(port, calcPWM(RESTRICT_CURRENT(port, getCurrent(port))));
     }
   }
 }
