@@ -92,20 +92,8 @@ static byte ms10 = 0;
 static byte cs10 = 0;
 static byte ds10 = 0;
 
-struct Timer {
-  TimerFunc call;
-  uint16_t  rest;
-  uint16_t  count;
-  bool      recurring;
-};
-
-static TimerFunc simpleTimerCalls[TIMER_CNT][MAX_SIMPLE_TIMERS];
-static byte simpleTimerCount[TIMER_CNT] = { 0, 0, 0 };
-
-#ifdef MAX_COMPLEX_TIMERS
-static Timer complexTimers[TIMER_CNT][MAX_COMPLEX_TIMERS];
-static byte complexTimerCount[TIMER_CNT] = { 0, 0, 0 };
-#endif
+static SimpleTimer* simpleTimers[TIMER_CNT] = {nullptr, nullptr, nullptr};
+static ComplexTimer* complexTimers[TIMER_CNT] = {nullptr, nullptr, nullptr};
 
 #define REG2_WRAP(R, N) R##N
 #define REG2(R,N) REG2_WRAP(R,N)
@@ -143,60 +131,47 @@ void initTimers()
   sei();  // Re-enable interrupts
 }
 
-void addSimpleTimer(byte timer, TimerFunc func)
+void addSimpleTimer(byte unit, SimpleTimer& timer)
 {
-  byte& cnt = simpleTimerCount[timer];
-  if (cnt < MAX_SIMPLE_TIMERS) {
-    simpleTimerCalls[timer][cnt++] = func;
-  }
+  timer.next = simpleTimers[unit];
+  simpleTimers[unit] = &timer;
 }
 
-#ifdef MAX_COMPLEX_TIMERS
-Timer* addComplexTimer(byte unit, TimerFunc call)
+void addComplexTimer(byte unit, ComplexTimer& timer)
 {
-  byte& cnt = complexTimerCount[unit];
-  if (cnt < MAX_COMPLEX_TIMERS) {
-    Timer* timer = &complexTimers[unit][cnt];
-    memset(timer, 0, sizeof(Timer));
-    timer->call = call;
-    cnt++;
-    return timer;
-  }
-  return NULL;
+  timer.next = complexTimers[unit];
+  complexTimers[unit] = &timer;
 }
 
-void setComplexTimer(Timer* timer, uint16_t count, bool recurring)
+void setComplexTimer(ComplexTimer& timer, uint16_t count, bool recurring)
 {
-  if (timer) {
-    cli();
-    timer->count = timer->rest = count;
-    timer->recurring = recurring;
-    sei();
-  }
+  cli();
+  timer.count = timer.rest = count;
+  timer.recurring = recurring;
+  sei();
 }
-#endif
 
 inline void runTimerCalls(byte timerUnit)
 {
-  TimerFunc* func = simpleTimerCalls[timerUnit];
-  for (register byte cnt = simpleTimerCount[timerUnit]; cnt>0; cnt--) {
-    (**(func++))();
+  SimpleTimer* t = simpleTimers[timerUnit];
+  while (t) {
+    (*t->call)();
+    t = t->next;
   }
-#ifdef MAX_COMPLEX_TIMERS
-  Timer* timer = complexTimers[timerUnit];
-  for (register byte cnt = complexTimerCount[timerUnit]; cnt>0; cnt--) {
-    if (timer->count != 0 && timer->rest != 0) {
-      timer->rest--;
-      if (timer->rest == 0) {
-        (*timer->call)();
-        if (timer->recurring) {
-          timer->rest = timer->count;
+
+  ComplexTimer* c = complexTimers[timerUnit];
+  while (c) {
+    if (c->count != 0 && c->rest != 0) {
+      c->rest--;
+      if (c->rest == 0) {
+        (*c->call)();
+        if (c->recurring) {
+          c->rest = c->count;
         }
       }
     }
-    timer++;
+    c++;
   }
-#endif
 }
 
 void MsTimer()

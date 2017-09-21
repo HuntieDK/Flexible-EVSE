@@ -72,8 +72,8 @@ static const byte intensity[CURRENT_SETTINGS] PROGMEM = {
 static byte   curState = UI_STATE_ACTIVE;    // What are we doing currently
 
 /* Initialization */
-static void debounceTimer();
-static void symbolTimer();
+static void debounceTimerFunc();
+static void symbolTimerFunc();
 static void colorOut(byte r, byte g, byte b);
 static void showCurrent(bool clearQueue);
 static void bufferEmpty();
@@ -88,6 +88,9 @@ static void indicateChargerState();
 static void readEEPROM();
 static void writeEEPROM();
 
+static SimpleTimer debounceTimer(debounceTimerFunc);
+static SimpleTimer symbolTimer(symbolTimerFunc);
+
 void initUI()
 {
   // Read current setting:
@@ -95,8 +98,8 @@ void initUI()
   
   // Setup button:
   pinMode(BUTTON_PIN, INPUT_PULLUP);
-  addSimpleTimer(TIMER_CS, &debounceTimer);
-  addSimpleTimer(TIMER_DS, &symbolTimer);
+  addSimpleTimer(TIMER_CS, debounceTimer);
+  addSimpleTimer(TIMER_DS, symbolTimer);
 
   // We use timer 0 (OC0A, OC0B = pin 5 and 6) for PWM control of UI led. However we need to invert one output to allow all colors.
   // However we need the output of one pin to be inverted, so we manipulate the registers.
@@ -116,7 +119,7 @@ static bool buttonState = false;
 static int currentButtonChangeTime = 0;
 static int buttonChangeTime = 0;
 
-static void debounceTimer()
+static void debounceTimerFunc()
 {
   if ((digitalRead(BUTTON_PIN) == LOW) == buttonState) {
     stateCount = 0;
@@ -177,7 +180,7 @@ static void nextSymbol() // Must be called with interrupts disabled...
   }
 }
 
-static void symbolTimer()
+static void symbolTimerFunc()
 {
   if (currentSymbol == nullptr) return; // Nothing to do...
   unsigned int timePassed = dsCount - symbolStamp;

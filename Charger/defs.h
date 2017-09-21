@@ -102,15 +102,6 @@ struct AtmelPort {
 #define TIMER_DS    2
 #define TIMER_CNT   3
 
-// Max number of timer calls for each
-#ifdef SINGLE_CHARGER
-#undef MAX_COMPLEX_TIMERS
-#define MAX_SIMPLE_TIMERS  3
-#else
-#define MAX_COMPLEX_TIMERS  5
-#define MAX_COMPLEX_TIMERS  5
-#endif
-
 #define RELAY_TIME  3   // 3/10 sec for flipping bistable relay
 
 // Types
@@ -139,11 +130,27 @@ void crc16Update(uint16_t& crc, uint8_t a);
 uint16_t calcCRC16(const byte* data, byte length);
 
 // timer.cpp
+
+struct SimpleTimer {
+  inline SimpleTimer(TimerFunc call) : call(call) {};
+  TimerFunc call;
+  struct SimpleTimer* next;
+};
+
+struct ComplexTimer {
+  inline ComplexTimer(TimerFunc call, uint16_t count, bool recurring) : call(call), count(count), recurring(recurring), rest(0) {};
+  TimerFunc call;
+  uint16_t  rest;
+  uint16_t  count;
+  bool      recurring;
+  struct ComplexTimer* next;
+};
+
 void initTimers();
 void setOutput(byte port, unsigned int dutyCycle);
-void addSimpleTimer(byte timer, TimerFunc func);
-Timer* addComplexTimer(byte unit, TimerFunc func);
-void setComplexTimer(Timer* timer, uint16_t count, bool recurring);
+void addSimpleTimer(byte unit, SimpleTimer& timer);
+void addComplexTimer(byte unit, ComplexTimer& timer);
+void setComplexTimer(ComplexTimer& timer, uint16_t count, bool recurring);
 
 // ad.cpp
 void initAD();
