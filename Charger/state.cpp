@@ -118,11 +118,7 @@ extern uint16_t adResult[N_PORTS][2];
 #define PWM_OFFSET_PWMHIGH       160
 #define PWM_REDUCTION_PWMHIGH    10   // Must be divisor in TIMER_TOP, offset and denominator (to reduce number of bits needed in calculation)
 
-// #define PWM_RESULT_WRAP(part) (((current + PWM_OFFSET_##part)*TIMER_TOP + PWM_DENOMINATOR_##part/2) / PWM_DENOMINATOR_##part)
-
 #define PWM_RESULT_WRAP(part) ((current*(TIMER_TOP/PWM_REDUCTION_##part) + PWM_OFFSET_##part*(TIMER_TOP/PWM_REDUCTION_##part) + PWM_DENOMINATOR_##part/PWM_REDUCTION_##part/2) / (PWM_DENOMINATOR_##part/PWM_REDUCTION_##part))
-
-
 #define PWM_RESULT(part) PWM_RESULT_WRAP(part)
 
 static unsigned int calcPWM(unsigned int current)
