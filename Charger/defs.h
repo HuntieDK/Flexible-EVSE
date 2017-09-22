@@ -155,7 +155,10 @@ void setComplexTimer(ComplexTimer& timer, uint16_t count, bool recurring);
 // ad.cpp
 void initAD();
 void startAD(int half);
+#ifdef UNTETHERED
 byte cableCurrentRestriction(byte port, byte current);
+bool cableOK(byte port);
+#endif
 
 // state.cpp
 void initState();

@@ -296,7 +296,7 @@ static bool cableCondition(byte port, byte newState, byte oldState)
   case STATE_FAN:
   case STATE_WAIT:
     // Can only go here with welldefined cable:
-    return cableStates[port] >= LEVEL_PP_13A && cableStates[port] <= LEVEL_PP_63A;
+    return cableOK(port);
   }
   return true;
 }
@@ -314,8 +314,13 @@ byte cableCurrentRestriction(byte port, byte current)
     return current>63 ? 63 : current;
   case LEVEL_PP_OPEN:
   case LEVEL_PP_SHORT:
-    return 0;
+    return 6;
   }
+}
+
+bool cableOK(byte port)
+{
+    return cableStates[port] >= LEVEL_PP_13A && cableStates[port] <= LEVEL_PP_63A;
 }
 
 #endif

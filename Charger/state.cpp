@@ -146,7 +146,13 @@ void chargerState()
   stateDef nextState;
   for (port = 0; port < N_PORTS; port++) {
     byte& portState = portStates[port];
-    memcpy_P(&nextState, &nextStates[portState][chargerPaused[port]?STATE_PAUSED:inputStates[port]], sizeof(stateDef));
+    byte inputState = chargerPaused[port]?STATE_PAUSED:inputStates[port];
+#ifdef UNTETHERED
+    if (!cableOK(port)) {
+      inputState = STATE_UNDEF;
+    }
+#endif
+    memcpy_P(&nextState, &nextStates[portState][inputState], sizeof(stateDef));
     if (inputStateAges[port] >= nextState.minAge) {
       if (portState != nextState.nextState && checkConditions(port, nextState.nextState, portState)) {
         runTransitions(port, nextState.nextState, portState);
