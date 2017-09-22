@@ -251,7 +251,7 @@ void showCurrent(bool clearQueue)
       enQueue({0, 0, 255, 6, 3});
     } else {
       amps--;
-      enQueue({0, 255, 255, 2, amps ? 2 : 3});
+      enQueue({0, 128, 128, 2, amps ? 2 : 3});
     }
   }
 }
@@ -415,7 +415,12 @@ static void indicateChargerState()
     break;
   case STATE_CONNECT:
   case STATE_WAIT:
-    enQueue({0, 0, 255, 1, 14}, true); // Blue slow blink for waiting state
+#ifdef UNTETHERED
+    if (!cableOK(0))
+      enQueue({255, 128, 0, 1, 14}, true); // Orange slow blink for waiting state with cable failure
+    else
+#endif
+      enQueue({0, 0, 255, 1, 14}, true); // Blue slow blink for waiting state
     break;
   case STATE_CHARGE:
   case STATE_FAN:

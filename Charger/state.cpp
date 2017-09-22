@@ -148,7 +148,7 @@ void chargerState()
     byte& portState = portStates[port];
     byte inputState = chargerPaused[port]?STATE_PAUSED:inputStates[port];
 #ifdef UNTETHERED
-    if (!cableOK(port)) {
+    if ((portState == STATE_CHARGE || portState == STATE_FAN) && !cableOK(port)) {
       inputState = STATE_UNDEF;
     }
 #endif

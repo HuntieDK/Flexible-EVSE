@@ -292,9 +292,9 @@ ISR(ADC_vect)
 static bool cableCondition(byte port, byte newState, byte oldState)
 {
   switch (newState) {
+  case STATE_WAIT:
   case STATE_CHARGE:
   case STATE_FAN:
-  case STATE_WAIT:
     // Can only go here with welldefined cable:
     return cableOK(port);
   }

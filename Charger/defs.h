@@ -26,14 +26,14 @@
 #define N_PORTS 1
 #define ACTUAL_PORTS  1
 
-#define SERIAL_DEBUG        // Enable ATTINY84 debug output
+// #define SERIAL_DEBUG        // Enable ATTINY84 debug output
 
 #define HAS_UI              // We got button and led UI (manages current setting)
 #undef  HAS_CURRENT_MGMT    // No active current management
 
 #define MAX_CURRENT 16
 
-#define PWM_SLOPE_CORRECTION  5   // Slope takes about 6ms in single charger opamp output - correct by that much
+#define PWM_SLOPE_CORRECTION  0   // Slope takes about 6ms in single charger opamp output - correct by that much
 
 #undef  MONITOR_RELAYS
 #define UNTETHERED
