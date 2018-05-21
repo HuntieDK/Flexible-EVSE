@@ -370,7 +370,9 @@ static void changeState(byte newState)
   curState = newState;
   switch (curState) {
   case UI_STATE_ACTIVE:
-    chargerPaused[0] = false;  // Restart charging if it was paused
+    if (forcedInputStates[0] == STATE_PAUSED) {  // Restart charging if it was paused
+      forcedInputStates[0] = STATE_NOT_FORCED;
+    }
     indicateChargerState();
     break;
   case UI_STATE_CURRENT:
@@ -379,7 +381,7 @@ static void changeState(byte newState)
     enQueue({0, pgm_read_byte(&intensity[current]), 0, 255, 0});
     break;
   case UI_STATE_PAUSED:
-    chargerPaused[0] = true;  // Will be picked up by state logic
+    forcedInputStates[0] = STATE_PAUSED;  // Will be picked up by state logic
     enQueue({0, 255, 255, 4, 4}, true); // Do five slow cyan 1Hz blinks while state changes
     enQueue({0, 255, 255, 4, 4});
     enQueue({0, 255, 255, 4, 5});

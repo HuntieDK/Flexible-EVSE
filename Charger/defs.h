@@ -26,7 +26,7 @@
 #define N_PORTS 1
 #define ACTUAL_PORTS  1
 
-// #define SERIAL_DEBUG        // Enable ATTINY84 debug output
+#define SERIAL_DEBUG        // Enable ATTINY84 debug output
 
 #define HAS_UI              // We got button and led UI (manages current setting)
 #undef  HAS_CURRENT_MGMT    // No active current management
@@ -36,7 +36,7 @@
 #define PWM_SLOPE_CORRECTION  0   // Slope takes about 6ms in single charger opamp output - correct by that much
 
 #undef  MONITOR_RELAYS
-#define UNTETHERED
+#undef  UNTETHERED
 #undef  HAS_METERING
 #undef  LOCKABLE
 
@@ -95,6 +95,8 @@ struct AtmelPort {
 #define STATE_PAUSED      7   // Pause charging
 #define N_STATES          8   // Total number of states
 #define STATE_ANY         N_STATES    // Pseudo state indicating state transition for any state
+// Pseudo states used for control:
+#define STATE_NOT_FORCED  128 // No forced state set
 
 // Timer type identifiers
 #define TIMER_MS    0
@@ -112,10 +114,10 @@ struct Timer;
 
 // Vars
 extern byte portCount;
-extern byte inputStates[N_PORTS];
+extern byte inputStates[N_PORTS];             //!< Last determined input state
+extern byte forcedInputStates[N_PORTS];       //!< Forced input state (STATE_PAUSED, cable error, ...). Ignored if set to STATE_NOT_FORCED.
 extern unsigned int inputStateAges[N_PORTS];
 extern byte portStates[N_PORTS];
-extern bool chargerPaused[N_PORTS];
 extern volatile unsigned int msCount;
 extern volatile unsigned int csCount;
 extern volatile unsigned int dsCount;

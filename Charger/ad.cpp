@@ -97,10 +97,13 @@ static const byte levelMap[1023*3/100] PROGMEM = {
   LEVEL_UNDEF,  // 17  - 18
 };
 
-byte portLevels[N_PORTS][2];
-byte inputStates[N_PORTS];
-unsigned int inputStateAges[N_PORTS];
-static byte stateCount[N_PORTS][N_STATES];
+byte portLevels[N_PORTS][2];                //!< Port levels for high and low part of square waves (LEVEL_*)
+byte inputStates[N_PORTS];                  //!< Last established input state
+byte forcedInputStates[N_PORTS];            //!< Forced input state (STATE_PAUSED, cable error, ...). Ignored if STATE_NOT_FORCED.
+static byte flickerCounts[N_PORTS];         //!< Incremented when input state is flickering - if flickering reaches SAMLPE_COUNT, state is forced to STATE_UNDEF.
+static byte lastStates[N_PORTS];            //!< Last state read from port
+static byte lastStateCounts[N_PORTS];       //!< Number of samples (ms) in a row the last state has been measured (when it reaches SAMPLE_COUNT, state is accepted).
+unsigned int inputStateAges[N_PORTS];       //!< Age of current state since accepted (ms)
 
 static const byte stateMap[N_LEVELS][N_LEVELS] PROGMEM = {
 //  LEVEL_UNDEF,  LEVEL_LOW12,  LEVEL_HIGH3,  LEVEL_HIGH6,  LEVEL_HIGH9,  LEVEL_HIGH12   <-- High half
@@ -128,10 +131,12 @@ void initAD()
   memset(portLevels, LEVEL_UNDEF, sizeof(portLevels));
   memset(inputStates, STATE_UNDEF, sizeof(inputStates));
   memset(inputStateAges, 0, sizeof(inputStateAges));
-  memset(stateCount, 0, sizeof(stateCount));
-  memset(cableStateCount, 0, sizeof(cableStateCount));
-
+  memset(forcedInputStates, STATE_NOT_FORCED, sizeof(forcedInputStates));
+  memset(lastStates, STATE_UNDEF, sizeof(lastStates));
+  memset(lastStateCounts, 0, sizeof(lastStateCounts));
+  memset(flickerCounts, 0, sizeof(flickerCounts));
 #ifdef UNTETHERED
+  memset(cableStateCount, 0, sizeof(cableStateCount));
   addCondition(STATE_ANY, cableCondition);
 #endif
   
@@ -241,24 +246,31 @@ ISR(ADC_vect)
     // Just got top/bottom measurement of adPort - calculate state.
     byte state = pgm_read_byte(&stateMap[portLevel[0]][portLevel[1]]);
     byte& inputState = inputStates[adPort];
+    byte& lastState = lastStates[adPort];
+    byte& lastStateCount = lastStateCounts[adPort];
+    byte& flickerCount = flickerCounts[adPort];
     byte oldState = inputState;
-    for (byte i=0; i<N_STATES; i++) {
-      byte& count = stateCount[adPort][i];
-      if (i == state) {
-        if (count < SAMPLE_COUNT) {
-          count++;
-          if (count == SAMPLE_COUNT) {
-            inputState = state;
-          }
-        }
+
+    if (state == lastState) {
+      if (lastStateCount < SAMPLE_COUNT) {
+        ++lastStateCount;
       } else {
-        if (count > 0) {
-          count--;
-          if (count == 0 && i == inputState) {
-            inputState = STATE_UNDEF;
-          }
-        }
+        flickerCount = 0;
+        inputState = state;
       }
+    } else {
+      lastState = state;
+      lastStateCount = 0;
+      if (flickerCount < SAMPLE_COUNT) {
+        ++flickerCount;
+      } else {
+        inputState = STATE_UNDEF;
+      }
+    }
+
+    // Input state counts have now been calculated based on actual readings. Take forced state into account:
+    if (forcedInputStates[adPort] != STATE_NOT_FORCED) {
+      inputState = forcedInputStates[adPort];
     }
     
     register unsigned int* age = inputStateAges;   // Update all port ages (1 ms older now)

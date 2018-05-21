@@ -3,7 +3,6 @@
 // Blå -- kontakt -- Rød -- spole -- Sort
 
 byte portStates[N_PORTS];
-bool chargerPaused[N_PORTS];
 
 #ifdef SINGLE_CHARGER
 
@@ -31,20 +30,20 @@ static bool relayStates[N_PORTS];
 
 struct stateDef {
   byte  nextState;  // Next state from this
-  int   minAge;     // Centiseconds
+  int   minAge;     // Milliseconds new state must be kept before changing
   // TODO: Add function pointer to state change verification machine
 };
 
 static const stateDef nextStates[N_STATES][N_STATES] PROGMEM = {
   // CURRENTvv MEASURED>> STATE_UNDEF          STATE_IDLE           STATE_CONNECT           STATE_WAIT          STATE_CHARGE          STATE_FAN           STATE_DISCONN      STATE_PAUSED
   /* STATE_UNDEF   */ { { STATE_UNDEF,  0 }, { STATE_IDLE, 100 }, { STATE_UNDEF,     0 }, { STATE_UNDEF, 0 }, { STATE_UNDEF,    0 }, { STATE_UNDEF, 0 }, { STATE_IDLE, 10 }, { STATE_UNDEF,   0 } },
-  /* STATE_IDLE    */ { { STATE_IDLE,   0 }, { STATE_IDLE,   0 }, { STATE_CONNECT, 100 }, { STATE_UNDEF, 0 }, { STATE_UNDEF,    0 }, { STATE_UNDEF, 0 }, { STATE_IDLE,  0 }, { STATE_IDLE,    0 } },
-  /* STATE_CONNECT */ { { STATE_UNDEF,  0 }, { STATE_IDLE,   0 }, { STATE_WAIT,    100 }, { STATE_WAIT,  0 }, { STATE_UNDEF,    0 }, { STATE_UNDEF, 0 }, { STATE_IDLE,  0 }, { STATE_IDLE,    0 } },
-  /* STATE_WAIT    */ { { STATE_UNDEF,  0 }, { STATE_IDLE,   0 }, { STATE_WAIT,      0 }, { STATE_WAIT,  0 }, { STATE_CHARGE, 100 }, { STATE_FAN, 100 }, { STATE_IDLE,  0 }, { STATE_IDLE,    0 } },
-  /* STATE_CHARGE  */ { { STATE_UNDEF,  0 }, { STATE_UNDEF,  0 }, { STATE_UNDEF,     0 }, { STATE_WAIT,  0 }, { STATE_CHARGE,   0 }, { STATE_FAN,   0 }, { STATE_IDLE, 10 }, { STATE_PAUSED,  0 } },
-  /* STATE_FAN     */ { { STATE_UNDEF,  0 }, { STATE_UNDEF,  0 }, { STATE_UNDEF,     0 }, { STATE_WAIT,  0 }, { STATE_CHARGE,   0 }, { STATE_FAN,   0 }, { STATE_IDLE, 10 }, { STATE_PAUSED,  0 } },
-  /* STATE_DISCONN */ { { STATE_UNDEF,  0 }, { STATE_IDLE,   0 }, { STATE_CONNECT,  10 }, { STATE_UNDEF, 0 }, { STATE_UNDEF,    0 }, { STATE_UNDEF, 0 }, { STATE_IDLE,  0 }, { STATE_IDLE,    0 } },
-  /* STATE_PAUSED */  { { STATE_UNDEF,  0 }, { STATE_IDLE,   0 }, { STATE_CONNECT,  10 }, { STATE_UNDEF, 0 }, { STATE_UNDEF,    0 }, { STATE_UNDEF, 0 }, { STATE_IDLE, 10 }, { STATE_IDLE, 2500 } },
+  /* STATE_IDLE    */ { { STATE_IDLE,  10 }, { STATE_IDLE,   0 }, { STATE_CONNECT, 100 }, { STATE_UNDEF, 0 }, { STATE_UNDEF,    0 }, { STATE_UNDEF, 0 }, { STATE_IDLE,  0 }, { STATE_IDLE,    0 } },
+  /* STATE_CONNECT */ { { STATE_UNDEF, 10 }, { STATE_IDLE,   0 }, { STATE_WAIT,    100 }, { STATE_WAIT,  0 }, { STATE_UNDEF,    0 }, { STATE_UNDEF, 0 }, { STATE_IDLE,  0 }, { STATE_IDLE,    0 } },
+  /* STATE_WAIT    */ { { STATE_UNDEF, 10 }, { STATE_IDLE,   0 }, { STATE_WAIT,      0 }, { STATE_WAIT,  0 }, { STATE_CHARGE, 100 }, { STATE_FAN, 100 }, { STATE_IDLE,  0 }, { STATE_IDLE,    0 } },
+  /* STATE_CHARGE  */ { { STATE_UNDEF, 10 }, { STATE_UNDEF, 10 }, { STATE_UNDEF,     0 }, { STATE_WAIT,  0 }, { STATE_CHARGE,   0 }, { STATE_FAN,   0 }, { STATE_IDLE, 10 }, { STATE_PAUSED,  0 } },
+  /* STATE_FAN     */ { { STATE_UNDEF, 10 }, { STATE_UNDEF, 10 }, { STATE_UNDEF,     0 }, { STATE_WAIT,  0 }, { STATE_CHARGE,   0 }, { STATE_FAN,   0 }, { STATE_IDLE, 10 }, { STATE_PAUSED,  0 } },
+  /* STATE_DISCONN */ { { STATE_UNDEF, 10 }, { STATE_IDLE,   0 }, { STATE_CONNECT,  10 }, { STATE_UNDEF, 0 }, { STATE_UNDEF,    0 }, { STATE_UNDEF, 0 }, { STATE_IDLE,  0 }, { STATE_IDLE,    0 } },
+  /* STATE_PAUSED */  { { STATE_UNDEF, 10 }, { STATE_IDLE,   0 }, { STATE_CONNECT,  10 }, { STATE_UNDEF, 0 }, { STATE_UNDEF,    0 }, { STATE_UNDEF, 0 }, { STATE_IDLE, 10 }, { STATE_IDLE, 2500 } },
 };
 
 
@@ -79,7 +78,6 @@ void initState()
 {
   byte port;
   memset(portStates, STATE_IDLE, sizeof(portStates));
-  memset(chargerPaused, 0, sizeof(chargerPaused));
   memset(relayStates, 0, sizeof(relayStates));
   memset(conditionCount, 0, sizeof(conditionCount));
   memset(transitionCount, 0, sizeof(transitionCount));
@@ -146,12 +144,7 @@ void chargerState()
   stateDef nextState;
   for (port = 0; port < N_PORTS; port++) {
     byte& portState = portStates[port];
-    byte inputState = chargerPaused[port]?STATE_PAUSED:inputStates[port];
-#ifdef UNTETHERED
-    if ((portState == STATE_CHARGE || portState == STATE_FAN) && !cableOK(port)) {
-      inputState = STATE_UNDEF;
-    }
-#endif
+    byte inputState = inputStates[port];
     memcpy_P(&nextState, &nextStates[portState][inputState], sizeof(stateDef));
     if (inputStateAges[port] >= nextState.minAge) {
       if (portState != nextState.nextState && checkConditions(port, nextState.nextState, portState)) {

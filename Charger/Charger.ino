@@ -46,7 +46,9 @@ byte portCount = ACTUAL_PORTS;
 extern int adStart, adDone;
 extern byte portLevels[][2];
 extern byte portStates[];
+#ifdef UNTETHERED
 extern byte cableStates[];
+#endif
 extern unsigned int portStateAges[];
 
 static unsigned int lastS = 0;
@@ -69,7 +71,9 @@ void loop()
     lastS = sCount;
     DEBUGF_CSTR_P("Tick %d\n", lastS);
     DEBUGF_CSTR_P("Measured state %d/%d\n", adResult[0][0], adResult[0][1])
+#ifdef UNTETHERED
     DEBUGF_CSTR_P("Cable level %d\n", cableStates[0])
+#endif
   }
 }
 
