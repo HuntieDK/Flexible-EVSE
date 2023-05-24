@@ -7,7 +7,11 @@
 
 #define BUTTON_PIN          4
 
-#define LED_COMMON_ANODE      // Define if LED has common anode (i.e. active low)
+
+//
+// #define LED_COMMON_ANODE      // Define if LED has common anode (i.e. active low)
+#define LED_BICOLOR         // Green/blue two-pin led with opposite polarity
+
 
 #define LED_PIN_R           3
 #define LED_PIN_G           7
@@ -224,19 +228,34 @@ static bool enQueue(const Symbol& symbol, bool clear = false)
 static void colorOut(byte r, byte g, byte b)
 {
   #ifdef PWM_LED_PIN_R
-  analogWrite(PWM_LED_PIN_R, LED_INT(r));
+    analogWrite(PWM_LED_PIN_R, LED_INT(r));
   #else
-  digitalWrite(LED_PIN_R, r ? LED_ON : LED_OFF);
+    digitalWrite(LED_PIN_R, r ? LED_ON : LED_OFF);
   #endif
-  #ifdef PWM_LED_PIN_G
-  analogWrite(PWM_LED_PIN_G, LED_INT(g));
+  #ifndef LED_BICOLOR
+    #ifdef PWM_LED_PIN_G
+    analogWrite(PWM_LED_PIN_G, LED_INT(g));
+    #else
+    digitalWrite(LED_PIN_G, g ? LED_ON : LED_OFF);
+    #endif
+    #ifdef PWM_LED_PIN_B
+    analogWrite(PWM_LED_PIN_B, LED_INT(b));
+    #else
+    digitalWrite(LED_PIN_B, b ? LED_ON : LED_OFF);
+    #endif
   #else
-  digitalWrite(LED_PIN_G, g ? LED_ON : LED_OFF);
-  #endif
-  #ifdef PWM_LED_PIN_B
-  analogWrite(PWM_LED_PIN_B, LED_INT(b));
-  #else
-  digitalWrite(LED_PIN_B, b ? LED_ON : LED_OFF);
+    // Bicolor LED - we need to be creative with the PWM mode to allow two-way current flow
+    uint16_t brightness = (uint16_t)g + (uint16_t)b;
+    if (brightness > 255) {
+      // We have to reduce brightness
+      g = (uint16_t)g * 255 / brightness;
+      b = (uint16_t)b * 255 / brightness;
+    }
+    analogWrite(PWM_LED_PIN_G, g);
+    if (b > 253) b = 253;
+    analogWrite(PWM_LED_PIN_B, 254-b);
+    // Invert blue output (OC0A) after analog write to show color correct (attinycore always sets positive mode in analogWrite):
+    TCCR0A |= (1 << COM0A0);
   #endif
 }
 
@@ -409,7 +428,12 @@ static void indicateChargerState()
 {
   switch (portStates[0]) {
   case STATE_UNDEF:
-    enQueue({255, 0, 0, 1, 1}, true); // Red fast blink for undefined state
+    #ifndef LED_BICOLOR
+      enQueue({255, 0, 0, 1, 1}, true); // Red fast blink for undefined state
+    #else
+      enQueue({0, 255, 0, 1, 0}, true); // Green/blue blink for undefined state
+      enQueue({0, 0, 255, 1, 0}, true); // Green/blue blink for undefined state
+    #endif
     break;
   case STATE_IDLE:
   case STATE_DISCONN:
@@ -456,18 +480,17 @@ static void bufferEmpty()
 
 static void readEEPROM()
 {
-  if (EEPROM[0] == 'F' && EEPROM[1] == 'E' && EEPROM[2] == 'F' && EEPROM[3] < CURRENT_SETTINGS) {
-    chargeCurrent = current = EEPROM[3];
+  if (EEPROM.read(0) == 'F' && EEPROM.read(1) == 'E' && EEPROM.read(2) == 'F' && EEPROM.read(3) < CURRENT_SETTINGS) {
+    chargeCurrent = current = EEPROM.read(3);
   }
 }
 
 static void writeEEPROM()
 {
-  if (EEPROM[0] != 'F') EEPROM[0] = 'F';
-  if (EEPROM[1] != 'E') EEPROM[1] = 'E';
-  if (EEPROM[2] != 'F') EEPROM[2] = 'F';
-  if (EEPROM[3] != chargeCurrent) EEPROM[3] = chargeCurrent;
+  EEPROM.write(0, 'F');
+  EEPROM.write(1, 'E');
+  EEPROM.write(2, 'F');
+  EEPROM.write(3, chargeCurrent);
 }
 
 #endif // HAS_UI
-

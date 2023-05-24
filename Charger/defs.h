@@ -26,7 +26,7 @@
 #define N_PORTS 1
 #define ACTUAL_PORTS  1
 
-#define SERIAL_DEBUG        // Enable ATTINY84 debug output
+// #define SERIAL_DEBUG        // Enable ATTINY84 debug output
 
 #define HAS_UI              // We got button and led UI (manages current setting)
 #undef  HAS_CURRENT_MGMT    // No active current management
@@ -207,4 +207,3 @@ void debugf(const char* fmt, ...);
 
 #define DEBUGF_CSTR_P(str, ...) { static const char _loc_p_str[] PROGMEM = str; debugf_p(_loc_p_str, __VA_ARGS__); }
 #define DEBUG_CSTR_P(str) { static const char _loc_p_str[] PROGMEM = str; debug_str_p(_loc_p_str); }
-
