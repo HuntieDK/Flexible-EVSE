@@ -8,11 +8,6 @@
 #define BUTTON_PIN          4
 
 
-//
-// #define LED_COMMON_ANODE      // Define if LED has common anode (i.e. active low)
-#define LED_BICOLOR         // Green/blue two-pin led with opposite polarity
-
-
 #define LED_PIN_R           3
 #define LED_PIN_G           7
 #define LED_PIN_B           8

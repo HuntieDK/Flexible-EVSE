@@ -107,7 +107,7 @@ static void debugf_ch(char ch)
 					unsigned int value = va_arg(ap, unsigned int);
 					while (value) {
 						byte v = value & 0x0f;
-						*--p = v<10 ? v+'0' : v+'a';
+						*--p = v<10 ? v+'0' : v+'a'-10;
 						value >>= 4;
 					}
 					if (!*p) *--p = '0';
@@ -165,4 +165,3 @@ void debugf(const char* fmt, ...)
 		in_pct = false;
 	}
 }
-

@@ -8,9 +8,20 @@ static int i = 0;
 
 extern uint16_t adResult[][2];
 
+// Reset watchdog timer
+void wdReset()
+{
+  if (adTick) {
+    adTick = false;
+    __asm__ __volatile__ ("wdr");
+  }
+}
+
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+  adTick = false;
+  WDTCSR = orBits(WDE, WDP2, WDP0, -1); 
   
   initDebug();
 
@@ -25,6 +36,8 @@ void setup()
   DEBUG_CSTR_P("Init Timers...\n");
   initTimers();
 
+  wdReset();
+
 #ifdef HAS_UI
   DEBUG_CSTR_P("Init UI...\n");
   initUI();
@@ -37,6 +50,7 @@ void setup()
 #endif
 
   DEBUG_CSTR_P("Mini EVSE is running.\n");
+  wdReset();
 }
 
 // the loop function runs over and over again forever
@@ -55,6 +69,8 @@ static unsigned int lastS = 0;
 
 extern uint16_t cableLevel;
 
+volatile bool adTick = false;
+
 void loop()
 {
   chargerState();
@@ -70,9 +86,11 @@ void loop()
   if (lastS != sCount) {
     lastS = sCount;
     DEBUGF_CSTR_P("Tick %d\n", lastS);
-    DEBUGF_CSTR_P("Measured state %d/%d\n", adResult[0][0], adResult[0][1])
+    DEBUGF_CSTR_P("Measured state %d/%d\n", adResult[0][0], adResult[0][1]);
+
 #ifdef UNTETHERED
     DEBUGF_CSTR_P("Cable level %d\n", cableStates[0])
 #endif
   }
+  wdReset();
 }

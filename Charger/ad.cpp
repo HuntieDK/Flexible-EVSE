@@ -13,7 +13,12 @@
 
 #ifdef SINGLE_CHARGER
 
+#ifndef DIFFERENTIAL_AD
 static const byte ADCPPorts[N_PORTS] = { 1 };
+#else
+static const byte ADCPPorts[N_PORTS] = { 0 };
+#endif
+
 #ifdef UNTETHERED
 static const byte ADPPPorts[N_PORTS] = { 0 };
 #endif
@@ -64,6 +69,7 @@ byte cableStates[N_PORTS];
 static byte cableStateCount[N_PORTS][N_PP_LEVELS];
 #endif
 
+#ifndef DIFFERENTIAL_AD
 static const byte levelMap[1023*3/100] PROGMEM = {
   LEVEL_LOW12,  // -12 - -11
   LEVEL_UNDEF,  // -11 - -10
@@ -97,6 +103,43 @@ static const byte levelMap[1023*3/100] PROGMEM = {
   LEVEL_UNDEF,  // 17  - 18
 };
 
+#else
+
+static const byte levelMap[30] PROGMEM = {
+  LEVEL_UNDEF,  //  0: -15 - -14
+  LEVEL_UNDEF,  //  1: -14 - -13
+  LEVEL_LOW12,  //  2: -13 - -12
+  LEVEL_LOW12,  //  3: -12 - -11
+  LEVEL_UNDEF,  //  4: -11 - -10
+  LEVEL_UNDEF,  //  5: -10 - -9
+  LEVEL_UNDEF,  //  6: -9  - -8
+  LEVEL_UNDEF,  //  7: -8  - -7
+  LEVEL_UNDEF,  //  8: -7  - -6
+  LEVEL_UNDEF,  //  9: -6  - -5
+  LEVEL_UNDEF,  // 10: -5  - -4
+  LEVEL_UNDEF,  // 11: -4  - -3
+  LEVEL_UNDEF,  // 12: -3  - -2
+  LEVEL_UNDEF,  // 13: -2  - -1
+  LEVEL_UNDEF,  // 14: -1  -  0
+  LEVEL_UNDEF,  // 15:  0  -  1
+  LEVEL_UNDEF,  // 16:  1  -  2
+  LEVEL_HIGH3,  // 17:  2  -  3
+  LEVEL_HIGH3,  // 18:  3  -  4
+  LEVEL_UNDEF,  // 19:  4  -  5
+  LEVEL_HIGH6,  // 20:  5  -  6
+  LEVEL_HIGH6,  // 21:  6  -  7
+  LEVEL_UNDEF,  // 22:  7  -  8
+  LEVEL_HIGH9,  // 23:  8  -  9
+  LEVEL_HIGH9,  // 24:  9  - 10
+  LEVEL_UNDEF,  // 25: 10  - 11
+  LEVEL_HIGH12, // 26: 11  - 12
+  LEVEL_HIGH12, // 27: 12  - 13
+  LEVEL_UNDEF,  // 28: 13  - 14
+  LEVEL_UNDEF,  // 29: 14  - 15
+};
+
+#endif
+
 byte portLevels[N_PORTS][2];                //!< Port levels for high and low part of square waves (LEVEL_*)
 byte inputStates[N_PORTS];                  //!< Last established input state
 byte forcedInputStates[N_PORTS];            //!< Forced input state (STATE_PAUSED, cable error, ...). Ignored if STATE_NOT_FORCED.
@@ -118,8 +161,10 @@ static const byte stateMap[N_LEVELS][N_LEVELS] PROGMEM = {
 // AD stuff
 byte adPort = 0;
 byte adPart = 0;
+byte diffPart = 0;
 int adStart = 0;
 int adDone = 0;
+uint16_t firstHalf;
 
 #ifdef UNTETHERED
 static bool cableCondition(byte port, byte newState, byte oldState);
@@ -177,8 +222,13 @@ void initAD()
 
 void startAD(int half)
 {
+  ADMUX = ADREF | ADCPPorts[adPort];
+
   ADCSRA |= _BV(ADSC); // Start conversion
   adPart = half;
+#ifdef DIFFERENTIAL_AD
+  diffPart = 0;
+#endif
   adStart++;
 }
 
@@ -188,6 +238,17 @@ ISR(ADC_vect)
   ADCSRA &= ~_BV(ADIF); // Reset interrupt flag
 
   uint16_t level = ADCW;
+#ifdef DIFFERENTIAL_AD
+  if (diffPart == 0) {
+    firstHalf = level;
+    diffPart = 1;
+    ADMUX = ADREF | ADCPPorts[adPort]+1; // Negative port is next
+    ADCSRA |= _BV(ADSC); // Start conversion
+    return;
+  }
+  // Level is here negative part - calculate difference with an offset:
+  level = (firstHalf+1024-level) / 2;
+#endif
 
 #ifdef UNTETHERED
   if (adPart == 2) {
@@ -237,10 +298,22 @@ ISR(ADC_vect)
 
   int half = adPart^(adPort>2);
 
+  // 12V -> Diff of 4V
+  // -12V -> Diff of -4V
+
+  // Diff of 5V -> 1024
+  // Diff of -5V -> 0
+
   adResult[adPort][half] = level; // TODO: Remove...
   byte* portLevel = &portLevels[adPort][0];
-  
-  portLevel[half] = pgm_read_byte(&levelMap[level * 3 / 100]);
+
+#ifndef DIFFERENTIAL_AD
+  register byte levelIdx = level * 3 / 100;
+#else
+  register byte levelIdx = level * 30 / 1024;
+#endif
+
+  portLevel[half] = pgm_read_byte(&levelMap[levelIdx]);
 
   if (adPart) {
     // Just got top/bottom measurement of adPort - calculate state.
@@ -297,6 +370,7 @@ ISR(ADC_vect)
 #endif
   }
   adDone++;
+  adTick = true;
 }
 
 #ifdef UNTETHERED

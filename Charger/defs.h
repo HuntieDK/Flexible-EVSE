@@ -1,9 +1,13 @@
 #include <stdarg.h>
 #include <Arduino.h>
 
+#define LED_COMMON_ANODE      // Define if LED has common anode (i.e. active low)
+// #define LED_BICOLOR         // Green/blue two-pin led with opposite polarity
+
 #ifdef ATTINYX4
 
 #define SINGLE_CHARGER
+#define DIFFERENTIAL_AD
 
 #ifdef F_CPU
 #undef F_CPU
@@ -26,7 +30,7 @@
 #define N_PORTS 1
 #define ACTUAL_PORTS  1
 
-// #define SERIAL_DEBUG        // Enable ATTINY84 debug output
+#define SERIAL_DEBUG        // Enable ATTINY84 debug output
 
 #define HAS_UI              // We got button and led UI (manages current setting)
 #undef  HAS_CURRENT_MGMT    // No active current management
@@ -122,6 +126,7 @@ extern volatile unsigned int msCount;
 extern volatile unsigned int csCount;
 extern volatile unsigned int dsCount;
 extern volatile unsigned int sCount;
+extern volatile bool adTick;
 #ifdef MONITOR_RELAYS
 extern bool relayMonitor[N_PORTS];
 #endif
